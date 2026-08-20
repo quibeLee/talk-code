@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: heng-ai-code
+
+server:
+  port: 9011
+  servlet:
+    context-path: /api
+
+# springdoc-openapi项目配置
+springdoc:
+  group-configs:
+    - group: 'default'
+      paths-to-match: ['/**']
+      packages-to-scan: ['com.heng.hengaicode.controller']
+# knife4j的增强配置，不需要增强可以不配
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
