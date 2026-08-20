@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/health")
-public class HealthChekController {
+public class HealthController {
 
     @RequestMapping("/")
     public BaseResponse<String> check() {
