@@ -1,7 +1,11 @@
 spring:
   application:
     name: heng-ai-code
-
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/heng_ai_code
+    username: root
+    password: 115712
 server:
   port: 9011
   servlet:
