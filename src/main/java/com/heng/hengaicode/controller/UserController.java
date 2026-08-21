@@ -38,11 +38,11 @@ public class UserController {
      */
 
     @PostMapping("register")
-    public BaseResponse<Long> register(@RequestBody UserRegisterRequest userRegisterRequest) {
+    public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) {
         ThrowUtils.throwIf(null == userRegisterRequest, ErrorCode.PARAMS_ERROR, "用户注册请求不能为空");
         String userAccount = userRegisterRequest.getUserAccount();
         String userPassword = userRegisterRequest.getUserPassword();
-        String confirmPassword = userRegisterRequest.getConfirmPassword();
+        String confirmPassword = userRegisterRequest.getCheckPassword();
         long userID = userService.userRegister(userAccount, userPassword, confirmPassword);
         return ResultUtils.success(userID);
     }
