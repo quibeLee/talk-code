@@ -15,7 +15,7 @@ public class MultiFileCodeParser implements CodeParser<MultiFileCodeResult> {
     private static final Pattern JS_CODE_PATTERN = Pattern.compile("```(?:js|javascript)\\s*\\n([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
 
     @Override
-    public MultiFileCodeResult parseCode(String codeContent) throws Exception {
+    public MultiFileCodeResult parseCode(String codeContent)  {
         MultiFileCodeResult result = new MultiFileCodeResult();
         // 提取各类代码
         String htmlCode = extractCodeByPattern(codeContent, HTML_CODE_PATTERN);

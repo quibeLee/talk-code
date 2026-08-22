@@ -17,7 +17,7 @@ public class HtmlCodeParser implements CodeParser<HtmlCodeResult> {
     private static final Pattern HTML_CODE_PATTERN = Pattern.compile("```html\\s*\\n([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
 
     @Override
-    public Object parseCode(String codeContent) throws Exception {
+    public HtmlCodeResult parseCode(String codeContent) throws Exception {
         HtmlCodeResult result = new HtmlCodeResult();
         // 提取 HTML 代码
         String htmlCode = extractHtmlCode(codeContent);

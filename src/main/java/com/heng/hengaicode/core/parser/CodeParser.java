@@ -13,5 +13,5 @@ public interface CodeParser<T> {
      * @return 解析后的对象
      * @throws Exception 解析异常
      */
-    Object parseCode(String codeContent) throws Exception;
+    T parseCode(String codeContent) throws Exception;
 }
