@@ -277,6 +277,8 @@ onMounted(() => {
 
 <style scoped>
 #homePage {
+  --mouse-x: 50%;   /* 默认值，与 var() 回退值一致 */
+  --mouse-y: 50%;
   width: 100%;
   margin: 0;
   padding: 0;
