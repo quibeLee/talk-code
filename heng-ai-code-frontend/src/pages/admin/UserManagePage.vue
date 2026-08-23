@@ -1,19 +1,17 @@
 <template>
   <div id="userManagePage">
     <!-- 搜索表单 -->
-    <div class="search-card">
-      <a-form layout="inline" :model="searchParams" @finish="doSearch">
-        <a-form-item label="账号">
-          <a-input v-model:value="searchParams.userAccount" placeholder="输入账号" />
-        </a-form-item>
-        <a-form-item label="用户名">
-          <a-input v-model:value="searchParams.userName" placeholder="输入用户名" />
-        </a-form-item>
-        <a-form-item>
-          <a-button type="primary" html-type="submit">搜索</a-button>
-        </a-form-item>
-      </a-form>
-    </div>
+    <a-form layout="inline" :model="searchParams" @finish="doSearch">
+      <a-form-item label="账号">
+        <a-input v-model:value="searchParams.userAccount" placeholder="输入账号" />
+      </a-form-item>
+      <a-form-item label="用户名">
+        <a-input v-model:value="searchParams.userName" placeholder="输入用户名" />
+      </a-form-item>
+      <a-form-item>
+        <a-button type="primary" html-type="submit">搜索</a-button>
+      </a-form-item>
+    </a-form>
     <a-divider />
     <!-- 表格 -->
     <a-table
@@ -120,12 +118,13 @@ const pagination = computed(() => {
 })
 
 // 表格分页变化时的操作
-const doTableChange = (page: any) => {
+const doTableChange = (page: { current: number; pageSize: number }) => {
   searchParams.pageNum = page.current
   searchParams.pageSize = page.pageSize
   fetchData()
 }
 
+// 搜索数据
 const doSearch = () => {
   // 重置页码
   searchParams.pageNum = 1
@@ -133,8 +132,8 @@ const doSearch = () => {
 }
 
 // 删除数据
-const doDelete = async (id: number) => {
-  if (null == id) {
+const doDelete = async (id: string) => {
+  if (!id) {
     return
   }
   const res = await deleteUser({ id })
@@ -153,25 +152,10 @@ onMounted(() => {
 })
 </script>
 
-// 搜索框样式
 <style scoped>
-.search-card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px 20px 0;
-  margin-bottom: 16px;
-}
-
-.search-card .ant-form-item {
-  margin-bottom: 16px;
-}
-
-.search-card .ant-form-item-label {
-  min-width: 56px;
-  text-align: right;
-}
-
-.search-card .ant-input {
-  width: 220px;
+#userManagePage {
+  padding: 24px;
+  background: white;
+  margin-top: 16px;
 }
 </style>
