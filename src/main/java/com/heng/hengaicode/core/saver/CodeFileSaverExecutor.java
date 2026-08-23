@@ -29,13 +29,13 @@ public class CodeFileSaverExecutor {
      * @param result 代码结果
      * @param codeGenTypeEnum 代码类型枚举
      */
-    public static File execute(Object result, CodeGenTypeEnum codeGenTypeEnum) {
+    public static File execute(Object result, CodeGenTypeEnum codeGenTypeEnum, long appID) {
         if (result == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "代码结果不能为空");
         }
         return switch (codeGenTypeEnum) {
-            case HTML -> htmlCodeSaverTemplate.saveCode((HtmlCodeResult) result);
-            case MULTI_FILE -> multiFileCodeSaverTemplate.saveCode((MultiFileCodeResult) result);
+            case HTML -> htmlCodeSaverTemplate.saveCode((HtmlCodeResult) result, appID);
+            case MULTI_FILE -> multiFileCodeSaverTemplate.saveCode((MultiFileCodeResult) result, appID);
             default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码类型 : " + codeGenTypeEnum.getValue());
         };
     }

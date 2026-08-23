@@ -18,13 +18,13 @@ class AiCodeGeneratorFacadeTest {
 
     @Test
     void generateCode() {
-        File file = aiCodeGeneratorFacade.generateCode("帮我创建登录网页，不超过10行", CodeGenTypeEnum.HTML);
+        File file = aiCodeGeneratorFacade.generateCode("帮我创建登录网页，不超过10行", CodeGenTypeEnum.HTML, 1L);
         Assertions.assertNotNull(file);
     }
 
     @Test
     void generateAndSaveCodeStream() {
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("帮我创建一个简单登录网页,不超过50行", CodeGenTypeEnum.HTML);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("帮我创建一个简单登录网页,不超过50行", CodeGenTypeEnum.HTML, 1L);
         // 阻塞等待所有完成
         List<String> codeList = codeStream.collectList().block();
         Assertions.assertNotNull(codeList);
