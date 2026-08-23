@@ -1,7 +1,7 @@
 package com.heng.hengaicode.service;
 
-import com.heng.hengaicode.model.User;
 import com.heng.hengaicode.model.dto.user.UserQueryRequest;
+import com.heng.hengaicode.model.entity.User;
 import com.heng.hengaicode.model.vo.LoginUserVO;
 import com.heng.hengaicode.model.vo.UserVO;
 import com.mybatisflex.core.query.QueryWrapper;

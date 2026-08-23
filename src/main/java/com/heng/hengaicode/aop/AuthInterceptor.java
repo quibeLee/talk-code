@@ -3,7 +3,7 @@ package com.heng.hengaicode.aop;
 import com.heng.hengaicode.annotation.AuthCheck;
 import com.heng.hengaicode.exception.BusinessException;
 import com.heng.hengaicode.exception.ErrorCode;
-import com.heng.hengaicode.model.User;
+import com.heng.hengaicode.model.entity.User;
 import com.heng.hengaicode.model.enums.UserEnum;
 import com.heng.hengaicode.service.UserService;
 import jakarta.annotation.Resource;

@@ -1,6 +1,6 @@
 package com.heng.hengaicode.mapper;
 
-import com.heng.hengaicode.model.User;
+import com.heng.hengaicode.model.entity.User;
 import com.mybatisflex.core.BaseMapper;
 
 /**
