@@ -14,19 +14,25 @@ import com.heng.hengaicode.mapper.AppMapper;
 import com.heng.hengaicode.model.dto.app.AppQueryRequest;
 import com.heng.hengaicode.model.entity.App;
 import com.heng.hengaicode.model.entity.User;
+import com.heng.hengaicode.model.enums.ChatHistoryMessageTypeEnum;
 import com.heng.hengaicode.model.enums.CodeGenTypeEnum;
 import com.heng.hengaicode.model.vo.AppVO;
 import com.heng.hengaicode.model.vo.UserVO;
 import com.heng.hengaicode.service.AppService;
+import com.heng.hengaicode.service.ChatHistoryService;
 import com.heng.hengaicode.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,11 +45,15 @@ import java.util.stream.Collectors;
  *
  * @author heng-ai-code
  */
+@Slf4j
 @Service
-public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppService{
+public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private ChatHistoryService chatHistoryService;
 
     @Resource
     private AiCodeGeneratorFacade aiCodeGeneratorFacade;
@@ -61,8 +71,30 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         // 4.获取应用的代码生成类型
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.fromValue(app.getCodeGenType());
         ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "不支持的代码生成类型");
-        // 5.调用代码生成服务
-        return aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        // 5.插入用户对话记录
+        long userId = loginUser.getId();
+        chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), userId);
+        // 6.调用AI生成代码(流式)
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        // 7.收集AI响应内容并在完成时插入到对话历史表中,如果AI生成的代码返回错误,也要进行保存
+        StringBuilder aiResponseBuilder = new StringBuilder();
+        return codeStream
+                .map(chunk -> {
+                    aiResponseBuilder.append(chunk);
+                    return chunk;
+                })
+                .doOnComplete(() -> {
+                    // 如果AI回复内容不为空,则插入到对话历史表中
+                    String aiResponse = aiResponseBuilder.toString();
+                    if (!StrUtil.isBlank(aiResponse)) {
+                        chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), userId);
+                    }
+                })
+                .doOnError(error -> {
+                    // 如果AI回复失败,也要记录对话历史
+                    String errorMsg = error.getMessage();
+                    chatHistoryService.addChatMessage(appId, errorMsg, ChatHistoryMessageTypeEnum.AI.getValue(), userId);
+                });
     }
 
     @Override
@@ -128,13 +160,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         }).collect(Collectors.toList());
     }
 
-    /**
-     * 分页查询应用信息包装方法
-     * @param queryWrapper 查询包装器
-     * @param pageNum      页码
-     * @param pageSize     每页数量
-     * @return 应用列表
-     */
+    @Override
     public Page<AppVO> getAppVOPage(QueryWrapper queryWrapper, long pageNum, long pageSize) {
         // 分页查询
         Page<App> appPage = page(Page.of(pageNum, pageSize), queryWrapper);
@@ -190,6 +216,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
 
-
-
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean removeById(@NonNull Serializable id) {
+        long appId = Long.parseLong(id.toString());
+        if (appId <= 0) {
+            return false;
+        }
+        chatHistoryService.deleteByAppId(appId);
+        return super.removeById(id);
+    }
 }

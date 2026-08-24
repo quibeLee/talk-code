@@ -181,6 +181,10 @@ public class AppController {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
         boolean result = appService.removeById(id);
+        // 应用删除失败,可能关联的对话历史记录未删除
+        if(!result) {
+            ResultUtils.error(ErrorCode.OPERATION_ERROR);
+        }
         return ResultUtils.success(result);
     }
 
