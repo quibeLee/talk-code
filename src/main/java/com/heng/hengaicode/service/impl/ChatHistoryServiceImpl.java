@@ -1,5 +1,6 @@
 package com.heng.hengaicode.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import com.heng.hengaicode.constant.UserConstant;
@@ -16,11 +17,16 @@ import com.heng.hengaicode.service.ChatHistoryService;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 对话历史 服务层实现。
@@ -28,6 +34,7 @@ import java.time.LocalDateTime;
  * @author heng-ai-code
  */
 @Service
+@Slf4j
 public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatHistory> implements ChatHistoryService {
 
     @Resource
@@ -55,11 +62,38 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     }
 
     @Override
-    public boolean deleteByAppId(Long appId) {
-        ThrowUtils.throwIf(ObjUtil.isNull(appId) || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
-        QueryWrapper queryWrapper = QueryWrapper.create()
-                .eq("appId", appId);
-        return this.remove(queryWrapper);
+    public int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory ChatMemory, int maxMessages) {
+        try {
+            // 1.构造查询条件,起点为1而不是0,用于排除最新的用户消息
+            QueryWrapper queryWrapper = QueryWrapper.create()
+                    .eq("appId", appId)
+                    .orderBy(ChatHistory::getCreateTime, false)
+                    .limit(1, maxMessages);
+            List<ChatHistory> chatHistoryList = this.list(queryWrapper);
+            if (CollUtil.isEmpty(chatHistoryList)) {
+                return 0;
+            }
+            // 2.反转列表保证时间为正序
+            CollUtil.reverse(chatHistoryList);
+            // 3.按时间顺序添加到记忆中,分类型添加（类型为用户或者AI）,加载前要清理历史缓存
+            ChatMemory.clear();
+            int loadedCount = 0;
+            for (ChatHistory chatHistory : chatHistoryList) {
+                if (ChatHistoryMessageTypeEnum.USER.getValue().equals(chatHistory.getMessageType())) {
+                    ChatMemory.add(UserMessage.from(chatHistory.getMessage()));
+                    loadedCount++;
+                } else if (ChatHistoryMessageTypeEnum.AI.getValue().equals(chatHistory.getMessageType())) {
+                    ChatMemory.add(AiMessage.from(chatHistory.getMessage()));
+                    loadedCount++;
+                }
+            }
+            log.info("成功为应用{}加载对话历史消息到对话记忆中,共加载{}条消息", appId, loadedCount);
+            return loadedCount;
+        } catch (Exception e) {
+            log.error("为应用{}加载对话历史消息到对话记忆中失败，异常信息：{}", appId, e.getMessage());
+            // 加载失败不影响正常功能
+            return 0;
+        }
     }
 
     @Override
@@ -115,4 +149,13 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         // 4. 执行查询
         return this.page(Page.of(1, pageSize), queryWrapper);
     }
+
+    @Override
+    public boolean deleteByAppId(Long appId) {
+        ThrowUtils.throwIf(ObjUtil.isNull(appId) || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
+        QueryWrapper queryWrapper = QueryWrapper.create()
+                .eq("appId", appId);
+        return this.remove(queryWrapper);
+    }
+
 }

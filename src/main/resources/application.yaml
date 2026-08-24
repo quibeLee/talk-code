@@ -6,9 +6,16 @@ spring:
     url: jdbc:mysql://localhost:3306/heng_ai_code
     username: root
     password: 115712
-  profiles:
-      active: local
+  # redis 配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      ttl: 3600
 
+  profiles:
+    active: local
 server:
   port: 9011
   servlet:
@@ -18,8 +25,8 @@ server:
 springdoc:
   group-configs:
     - group: 'default'
-      paths-to-match: ['/**']
-      packages-to-scan: ['com.heng.hengaicode.controller']
+      paths-to-match: [ '/**' ]
+      packages-to-scan: [ 'com.heng.hengaicode.controller' ]
 # knife4j的增强配置，不需要增强可以不配
 knife4j:
   enable: true

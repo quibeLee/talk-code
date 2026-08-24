@@ -15,7 +15,7 @@ class AiCodeGeneratorServiceTest {
 
     @Test
     void generateHtmlCode() {
-        HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode("帮我创建一个张三的个人博客，不超过20行");
+        HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode("帮我创建一个张三的个人简历，不超过30行");
         Assertions.assertNotNull(result);
     }
 
@@ -24,4 +24,17 @@ class AiCodeGeneratorServiceTest {
         MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode("帮我创建一个张三的个人简历，不超过30行");
         Assertions.assertNotNull(result);
     }
+
+    @Test
+    void testChatMemory() {
+        HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode("做个程序员张三的工具网站，总代码量不超过 20 行");
+        Assertions.assertNotNull(result);
+        result = aiCodeGeneratorService.generateHtmlCode("不要生成网站，告诉我你刚刚做了什么？");
+        Assertions.assertNotNull(result);
+        result = aiCodeGeneratorService.generateHtmlCode("做个程序员张三的工具网站，总代码量不超过 20 行");
+        Assertions.assertNotNull(result);
+        result = aiCodeGeneratorService.generateHtmlCode("不要生成网站，告诉我你刚刚做了什么？");
+        Assertions.assertNotNull(result);
+    }
+
 }
