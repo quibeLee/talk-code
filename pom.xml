@@ -34,7 +34,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
-
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
@@ -100,7 +99,15 @@
             <artifactId>langchain4j-community-redis-spring-boot4-starter</artifactId>
             <version>1.19.0-beta29</version>
         </dependency>
-
+        <!-- Spring Session + Redis -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.session</groupId>
+            <artifactId>spring-session-data-redis</artifactId>
+        </dependency>
         <!--> lombok 依赖<-->
         <dependency>
             <groupId>org.projectlombok</groupId>

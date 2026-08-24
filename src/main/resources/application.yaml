@@ -13,14 +13,22 @@ spring:
       port: 6379
       password:
       ttl: 3600
-
+  # session 配置
+  session:
+    store-type: redis
+    # session 过期时间 30天
+    timeout: 2592000
+  #读取本地环境配置
   profiles:
     active: local
 server:
   port: 9011
   servlet:
     context-path: /api
-
+    #Cookie 过期时间 30天
+    session:
+      cookie:
+        max-age: 2592000
 # springdoc-openapi项目配置
 springdoc:
   group-configs:
