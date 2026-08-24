@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class HealthController {
 
     @RequestMapping("/")
-    public BaseResponse<String> check() {
-        return ResultUtils.success("health check success");
+    public BaseResponse<String> healthCheck() {
+        return ResultUtils.success("ok");
     }
 }
 

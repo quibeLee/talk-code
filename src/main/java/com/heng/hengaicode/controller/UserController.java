@@ -52,7 +52,7 @@ public class UserController {
      */
 
     @PostMapping("login")
-    public BaseResponse<LoginUserVO> login(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
+    public BaseResponse<LoginUserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(null == userLoginRequest, ErrorCode.PARAMS_ERROR, "用户登录请求不能为空");
         String userAccount = userLoginRequest.getUserAccount();
         String userPassword = userLoginRequest.getUserPassword();
@@ -67,7 +67,7 @@ public class UserController {
      * @return 当前登录用户脱敏后信息
      */
     @GetMapping("/get/login")
-    public BaseResponse<LoginUserVO> getCurrentLoginUser(HttpServletRequest request) {
+    public BaseResponse<LoginUserVO> getLoginUser(HttpServletRequest request) {
         User currentLoginUser = userService.getCurrentLoginUser(request);
         return ResultUtils.success(userService.getLoginUserVO(currentLoginUser));
     }
@@ -76,7 +76,7 @@ public class UserController {
      * 用户退出。
      */
     @PostMapping("logout")
-    public BaseResponse<Boolean> logout(HttpServletRequest request) {
+    public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
         boolean isLogout = userService.userLogout(request);
         return ResultUtils.success(isLogout);
     }
