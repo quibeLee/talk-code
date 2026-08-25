@@ -1,5 +1,6 @@
 package com.talkcode.core.handler;
 
+import cn.hutool.core.util.StrUtil;
 import com.talkcode.model.entity.User;
 import com.talkcode.model.enums.ChatHistoryMessageTypeEnum;
 import com.talkcode.service.ChatHistoryService;
@@ -36,6 +37,11 @@ public class SimpleTextStreamHandler {
                 .doOnComplete(() -> {
                     // 流式响应完成后，添加AI消息到对话历史
                     String aiResponse = aiResponseBuilder.toString();
+                    // 防御：模型可能返回空文本（如推理模型只输出推理内容、未输出正文），此时不保存空消息，避免异常中断整个流
+                    if (StrUtil.isBlank(aiResponse)) {
+                        log.warn("AI 流式响应内容为空，跳过保存 AI 对话消息, appId={}", appId);
+                        return;
+                    }
                     chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
                 })
                 .doOnError(error -> {

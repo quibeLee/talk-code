@@ -41,22 +41,47 @@ knife4j:
   setting:
     language: zh_cn
 
-# AI
+# AI 配置
 langchain4j:
   open-ai:
     chat-model:
       base-url: https://api.deepseek.com
-      api-key: <Your API Key>
-      model-name: deepseek-chat
-      log-requests: true
-      log-responses: true
-    streaming-chat-model:
-      base-url: https://api.deepseek.com
-      api-key: <Your API Key>
+      api-key: <your-api-key>
       model-name: deepseek-chat
       max-tokens: 8192
-      log-requests: true
-      log-responses: true
+      log-requests: false
+      log-responses: false
+    streaming-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: <your-api-key>
+      model-name: deepseek-chat
+      max-tokens: 8192
+      log-requests: false
+      log-responses: false
+    # 推理 AI 模型配置（用于复杂的推理任务）
+    reasoning-streaming-chat-model:
+      base-url: https://api.deepseek.com
+      api-key: <your-api-key>
+      model-name: deepseek-chat
+      max-tokens: 8192
+      temperature: 0.1
+      log-requests: false
+      log-responses: false
+    # 智能路由 AI 模型配置
+    routing-chat-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: <your-api-key>
+      model-name: qwen-turbo
+      max-tokens: 100
+      log-requests: false
+      log-responses: false
+  cos:
+      client:
+        host: your-custom-domain.com
+        secretId: your-secret-id
+        secretKey: your-secret-key
+        region: ap-shanghai
+        bucket: your-bucket-name
 
 
 

@@ -1,12 +1,13 @@
 package com.talkcode.service;
 
+import com.mybatisflex.core.paginate.Page;
+import com.mybatisflex.core.query.QueryWrapper;
+import com.mybatisflex.core.service.IService;
+import com.talkcode.model.dto.app.AppAddRequest;
 import com.talkcode.model.dto.app.AppQueryRequest;
 import com.talkcode.model.entity.App;
 import com.talkcode.model.entity.User;
 import com.talkcode.model.vo.AppVO;
-import com.mybatisflex.core.paginate.Page;
-import com.mybatisflex.core.query.QueryWrapper;
-import com.mybatisflex.core.service.IService;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -70,4 +71,21 @@ public interface AppService extends IService<App> {
      * @return 部署标识
      */
     String deployApp(Long appId, User loginUser);
+
+    /**
+     * 异步生成应用截图并更新封面
+     *
+     * @param appId  应用ID
+     * @param appUrl 应用访问URL
+     */
+    void generateAppScreenshotAsync(Long appId, String appUrl);
+
+    /**
+     * 创建应用
+     *
+     * @param appAddRequest 应用创建请求
+     * @param loginUser 登录用户
+     * @return 应用ID
+     */
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
 }

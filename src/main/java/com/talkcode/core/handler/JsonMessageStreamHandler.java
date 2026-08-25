@@ -59,7 +59,12 @@ public class JsonMessageStreamHandler {
                 .doOnComplete(() -> {
                     // 流式响应完成后，添加 AI 消息到对话历史
                     String aiResponse = chatHistoryStringBuilder.toString();
-                    chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+                    // 防御：模型可能返回空文本（如推理模型只输出推理内容、未输出正文），此时不保存空消息，避免异常中断整个流
+                    if (StrUtil.isNotBlank(aiResponse)) {
+                        chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+                    } else {
+                        log.warn("AI 流式响应内容为空，跳过保存 AI 对话消息, appId={}", appId);
+                    }
                     // 异步构建 Vue 项目
                     // 构建路径
                     String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + "vue_project_" + appId;
