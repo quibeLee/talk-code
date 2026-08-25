@@ -15,7 +15,9 @@ import com.talkcode.core.saver.CodeFileSaverExecutor;
 import com.talkcode.exception.BusinessException;
 import com.talkcode.exception.ErrorCode;
 import com.talkcode.model.enums.CodeGenTypeEnum;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.PartialToolCall;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.tool.ToolExecution;
@@ -25,6 +27,9 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 代码生成器Facade,组合AI代码生成和保存服务
@@ -107,27 +112,80 @@ public class AiCodeGeneratorFacade {
     /**
      * 1.将 TokenStream 转换为 Flux<String>，并传递工具调用信息
      * 2.生成代码（Vue项目）,并保存到文件
+     * <p>
+     * 注意：
+     * 工具调用请求处理,工具调用参数流式到达时触发，前端可实时展示"正在调用工具..."
+     * <p>
+     * 兜底说明（非标准提供商 name 为空的问题）：
+     * {@link PartialToolCall} 构造函数中 {@code this.name = ensureNotBlank(builder.name, "name")}，
+     * 当 name 为空会抛出 IllegalArgumentException。
+     * OpenAI 流式协议里工具调用 delta 的 name 分布在第一个 chunk（chunk1: name="writeFile"，后续 chunk 为 null），
+     * langchain4j 内部 ToolCallBuilder 会累积第一个 chunk 的 name，所以标准 OpenAI 提供商 name 始终有值。
+     * 但非标准提供商(如 Qwen、Deepseek)可能全程不携带 name，导致 PartialToolCall 构造失败。
+     * <p>
+     * 由于 langchain4j 1.19.0 的 {@link TokenStream} 并未提供 {@code onCompleteToolCall} 回调，
+     * 这里改用现有 API 实现等价兜底：
+     * <ul>
+     *   <li>{@code onPartialToolCall}：实时上报部分工具调用，并记录已上报的工具调用 id（用于去重）。</li>
+     *   <li>{@code onToolExecuted}：工具真正执行时携带完整请求信息(id/name/arguments/result)，
+     *       若该工具调用此前因 name 为空未通过 onPartialToolCall 上报，则先补发一条完整的工具请求消息。</li>
+     *   <li>{@code onCompleteResponse}：最终响应中仍携带且未上报的工具调用，再补发完整请求消息作为兜底。</li>
+     * </ul>
+     *
      * @param tokenStream TokenStream 对象
+     * @param appId       应用ID
      * @return Flux<String> 流式响应
      */
     private Flux<String> processTokenStream(TokenStream tokenStream, long appId) {
         return Flux.create(sink -> {
-            tokenStream.onPartialResponse((String partialResponse) -> {
+            // 记录已上报给前端的工具调用 id，用于去重（部分提供商可能不返回 id，此时不判重、直接兜底上报）
+            Set<String> reportedToolRequestIds = ConcurrentHashMap.newKeySet();
+            tokenStream
+                    .onPartialResponse((String partialResponse) -> {
                         AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
                         sink.next(JSONUtil.toJsonStr(aiResponseMessage));
                     })
-                    //工具调用请求处理,工具调用参数流式到达时触发，前端可实时展示"正在调用工具..."
+
+                    // 工具调用请求处理,工具调用参数流式到达时触发，前端可实时展示"正在调用工具..."
                     .onPartialToolCall((PartialToolCall partialToolCall) -> {
-                        ToolRequestMessage toolRequestMessage = new ToolRequestMessage(partialToolCall);
-                        sink.next(JSONUtil.toJsonStr(toolRequestMessage));
+                        try {
+                            if (partialToolCall.id() != null) {
+                                reportedToolRequestIds.add(partialToolCall.id());
+                            }
+                            ToolRequestMessage toolRequestMessage = new ToolRequestMessage(partialToolCall);
+                            sink.next(JSONUtil.toJsonStr(toolRequestMessage));
+                        } catch (Exception e) {
+                            // 防御：个别提供商构造 partialToolCall 时异常，避免中断整个流，交由后续完整工具调用信息兜底
+                            log.warn("处理部分工具调用失败，等待完整工具调用信息兜底: {}", e.getMessage());
+                        }
                     })
+
+                    // 工具执行完成：携带完整工具调用信息(id/name/arguments/result)。
+                    // 非标准提供商(name 为空)导致 PartialToolCall 未上报时，这里作为等价兜底，先补发完整请求再上报结果。
                     .onToolExecuted((ToolExecution toolExecution) -> {
+                        ToolExecutionRequest request = toolExecution.request();
+                        if (request.id() == null || reportedToolRequestIds.add(request.id())) {
+                            ToolRequestMessage completeRequestMessage = new ToolRequestMessage(new CompleteToolCall(0, request));
+                            sink.next(JSONUtil.toJsonStr(completeRequestMessage));
+                        }
                         ToolExecutedMessage toolExecutedMessage = new ToolExecutedMessage(toolExecution);
                         sink.next(JSONUtil.toJsonStr(toolExecutedMessage));
                     })
+
                     .onCompleteResponse((ChatResponse response) -> {
+                        // 兜底：最终响应中仍携带、且此前未上报的工具调用，再补发完整请求信息
+                        List<ToolExecutionRequest> toolExecutionRequests = response.aiMessage().toolExecutionRequests();
+                        if (toolExecutionRequests != null) {
+                            for (int i = 0; i < toolExecutionRequests.size(); i++) {
+                                ToolExecutionRequest request = toolExecutionRequests.get(i);
+                                if (request.id() == null || reportedToolRequestIds.add(request.id())) {
+                                    ToolRequestMessage completeRequestMessage = new ToolRequestMessage(new CompleteToolCall(i, request));
+                                    sink.next(JSONUtil.toJsonStr(completeRequestMessage));
+                                }
+                            }
+                        }
                         // 执行 Vue 项目构建（同步执行，确保预览时项目已就绪）
-                        String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + "/vue_project_" + appId;
+                        String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + "vue_project_" + appId;
                         vueProjectBuilder.buildProject(projectPath);
                         sink.complete();
                     })
@@ -158,7 +216,8 @@ public class AiCodeGeneratorFacade {
                 // 使用代码解析执行器解析代码
                 Object result = CodeParserExecutor.execute(completeCode, codeGenTypeEnum);
                 // 使用代码保存执行器保存代码
-                CodeFileSaverExecutor.execute(result, codeGenTypeEnum, appId);
+                File saveDir = CodeFileSaverExecutor.execute(result, codeGenTypeEnum, appId);
+                log.info("保存成功，目录为：{}", saveDir.getAbsolutePath());
             } catch (Exception e) {
                 log.error("保存代码到文件失败：{}", e.getMessage());
             }
