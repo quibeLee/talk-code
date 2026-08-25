@@ -1,9 +1,9 @@
 spring:
   application:
-    name: heng-ai-code
+    name: talk-code
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/heng_ai_code
+    url: jdbc:mysql://localhost:3306/talk_code
     username: root
     password: 115712
   # redis 配置
@@ -34,7 +34,7 @@ springdoc:
   group-configs:
     - group: 'default'
       paths-to-match: [ '/**' ]
-      packages-to-scan: [ 'com.heng.hengaicode.controller' ]
+      packages-to-scan: [ 'com.talkcode.controller' ]
 # knife4j的增强配置，不需要增强可以不配
 knife4j:
   enable: true

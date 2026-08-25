@@ -2,10 +2,10 @@
 # @author heng
 
 -- 创建库
-create database if not exists heng_ai_code;
+create database if not exists talk_code;
 
 -- 切换库
-use heng_ai_code;
+use talk_code;
 
 -- 用户表
 -- 以下是建表语句
