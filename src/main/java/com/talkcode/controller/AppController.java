@@ -3,6 +3,8 @@ package com.talkcode.controller;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.mybatisflex.core.paginate.Page;
+import com.mybatisflex.core.query.QueryWrapper;
 import com.talkcode.annotation.AuthCheck;
 import com.talkcode.common.BaseResponse;
 import com.talkcode.common.DeleteRequest;
@@ -13,15 +15,12 @@ import com.talkcode.exception.BusinessException;
 import com.talkcode.exception.ErrorCode;
 import com.talkcode.exception.ThrowUtils;
 import com.talkcode.model.dto.app.*;
-import com.talkcode.model.dto.app.*;
 import com.talkcode.model.entity.App;
 import com.talkcode.model.entity.User;
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import com.talkcode.model.vo.AppVO;
 import com.talkcode.service.AppService;
 import com.talkcode.service.UserService;
-import com.mybatisflex.core.paginate.Page;
-import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;
@@ -80,26 +79,6 @@ public class AppController {
     }
 
     /**
-     * 应用部署
-     *
-     * @param appDeployRequest 部署请求
-     * @param request          请求
-     * @return 部署 URL
-     */
-    @PostMapping("/deploy")
-    public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(appDeployRequest == null, ErrorCode.PARAMS_ERROR);
-        Long appId = appDeployRequest.getAppId();
-        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
-        // 获取当前登录用户
-        User loginUser = userService.getCurrentLoginUser(request);
-        // 调用服务部署应用
-        String deployUrl = appService.deployApp(appId, loginUser);
-        return ResultUtils.success(deployUrl);
-    }
-
-
-    /**
      * 创建应用
      *
      * @param appAddRequest 创建应用请求
@@ -121,7 +100,7 @@ public class AppController {
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
         // 暂时设置为多文件生成
-        app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
         // 插入数据库
         boolean result = appService.save(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
@@ -157,6 +136,25 @@ public class AppController {
         boolean result = appService.updateById(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 应用部署
+     *
+     * @param appDeployRequest 部署请求
+     * @param request          请求
+     * @return 部署 URL
+     */
+    @PostMapping("/deploy")
+    public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(appDeployRequest == null, ErrorCode.PARAMS_ERROR);
+        Long appId = appDeployRequest.getAppId();
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        // 获取当前登录用户
+        User loginUser = userService.getCurrentLoginUser(request);
+        // 调用服务部署应用
+        String deployUrl = appService.deployApp(appId, loginUser);
+        return ResultUtils.success(deployUrl);
     }
 
     /**
