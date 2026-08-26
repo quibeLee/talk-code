@@ -75,13 +75,29 @@ langchain4j:
       max-tokens: 100
       log-requests: false
       log-responses: false
-  cos:
-      client:
-        host: your-custom-domain.com
-        secretId: your-secret-id
-        secretKey: your-secret-key
-        region: ap-shanghai
-        bucket: your-bucket-name
+cos:
+    client:
+      host: your-custom-domain.com
+      secretId: your-secret-id
+      secretKey: your-secret-key
+      region: ap-shanghai
+      bucket: your-bucket-name
+# Pexels 图片搜索配置
+pexels:
+  api-key: your-secret-key
+# 阿里云 DashScope 配置
+dashscope:
+  api-key: your-secret-key
+  image-model: wan2.2-t2i-flash
+# 监控
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
 
 
 

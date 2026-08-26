@@ -62,7 +62,7 @@ public abstract class CodeFileSaverTemplate<T> {
      */
     protected final String buildUniqueDirPath(long appId) {
         if (appId <= 0) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用ID不能为空");
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用ID不合法");
         }
         String uniqueDirFiilname = StrUtil.format("{}_{}", getCodeGenType().getValue(), appId);
         String dirPath = FILE_SAVE_ROOT_DIR + File.separator + uniqueDirFiilname;

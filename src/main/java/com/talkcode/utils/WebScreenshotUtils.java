@@ -91,7 +91,7 @@ public class WebScreenshotUtils {
             compressImage(imageSavePath, compressedImagePath);
             log.info("压缩图片保存成功：{}", compressedImagePath);
             // 删除原始图片
-            FileUtil.del(imageSavePath);
+            FileUtil.del(rootPath);
             return compressedImagePath;
         } catch (Exception e) {
             log.error("网页截图失败：{}", webUrl, e);
