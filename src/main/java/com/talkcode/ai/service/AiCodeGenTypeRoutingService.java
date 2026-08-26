@@ -1,4 +1,4 @@
-package com.talkcode.ai;
+package com.talkcode.ai.service;
 
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import dev.langchain4j.service.SystemMessage;
@@ -7,7 +7,7 @@ import dev.langchain4j.service.SystemMessage;
  * AI代码生成类型智能路由服务
  * 使用结构化输出直接返回枚举类型
  *
- * @author yupi
+ * @author heng
  */
 public interface AiCodeGenTypeRoutingService {
 

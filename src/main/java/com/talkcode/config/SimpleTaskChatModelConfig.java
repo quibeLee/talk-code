@@ -1,43 +1,41 @@
 package com.talkcode.config;
 
-import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 推理流式模型配置类
+ * 路由/标题等轻量任务模型配置
+ * <p>
+ * 使用便宜快速的模型（如 qwen-turbo）完成标题生成、代码生成类型路由等小任务，
+ * 避免这些小请求打到主代码生成大模型（deepseek-v4-flash）上，导致创建应用缓慢。
+ * <p>
  */
 @Configuration
-@ConfigurationProperties(prefix = "langchain4j.open-ai.reasoning-streaming-chat-model")
+@ConfigurationProperties(prefix = "langchain4j.open-ai.simple-task-chat-model")
 @Data
-public class ReasoningStreamingChatModelConfig {
+public class SimpleTaskChatModelConfig {
 
     private String baseUrl;
     private String apiKey;
     private String modelName;
     private int maxTokens;
-    private double temperature;
     private boolean logRequests;
     private boolean logResponses;
 
-
     /**
-     * 推理流式模型（用于 Vue 项目生成，带工具调用）
+     * 轻量任务 ChatModel（如 qwen-turbo）
      */
     @Bean
-    public StreamingChatModel reasoningStreamingChatModel() {
-        // 为了测试方便临时修改
-        /*final String modelName = "deepseek-chat";
-        final int maxTokens = 8192;*/
-        return OpenAiStreamingChatModel.builder()
+    public ChatModel simpleTaskChatModel() {
+        return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .maxTokens(maxTokens)
-                .temperature(temperature)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
                 .build();

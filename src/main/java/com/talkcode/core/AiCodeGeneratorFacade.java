@@ -1,13 +1,13 @@
 package com.talkcode.core;
 
 import cn.hutool.json.JSONUtil;
-import com.talkcode.ai.AiCodeGeneratorService;
 import com.talkcode.ai.AiCodeGeneratorServiceFactory;
 import com.talkcode.ai.model.HtmlCodeResult;
 import com.talkcode.ai.model.MultiFileCodeResult;
 import com.talkcode.ai.model.message.AiResponseMessage;
 import com.talkcode.ai.model.message.ToolExecutedMessage;
 import com.talkcode.ai.model.message.ToolRequestMessage;
+import com.talkcode.ai.service.AiCodeGeneratorService;
 import com.talkcode.constant.AppConstant;
 import com.talkcode.core.builder.VueProjectBuilder;
 import com.talkcode.core.parser.CodeParserExecutor;
@@ -76,6 +76,10 @@ public class AiCodeGeneratorFacade {
 
     /**
      * 统一入口：根据类型生成并保存代码（流式）
+     * <p>
+     * 自动区分【创建】与【修改】场景：
+     * - 应用输出目录已存在且包含文件 → 修改（使用修改提示词/服务/最小工具集）
+     * - 否则 → 创建（使用创建提示词/服务，Vue 只暴露文件写入工具）
      *
      * @param userMessage     用户提示词
      * @param codeGenTypeEnum 生成类型
@@ -86,20 +90,27 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
-        // 根据appId获取对应的代码生成器服务
-        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId, codeGenTypeEnum);
+        boolean modify = isModifyRequest(appId, codeGenTypeEnum);
+        log.info("应用 {} 生成类型 {} 本次为{}请求", appId, codeGenTypeEnum.getValue(), modify ? "修改" : "创建");
         return switch (codeGenTypeEnum) {
-            case HTML -> {
-                Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
-                yield processCodeStream(codeStream, codeGenTypeEnum, appId);
-            }
-            case MULTI_FILE -> {
-                Flux<String> codeStream = aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+            case HTML, MULTI_FILE -> {
+                AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId, codeGenTypeEnum);
+                Flux<String> codeStream = switch (codeGenTypeEnum) {
+                    case HTML -> modify
+                            ? aiCodeGeneratorService.modifyHtmlCodeStream(userMessage)
+                            : aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
+                    case MULTI_FILE -> modify
+                            ? aiCodeGeneratorService.modifyMultiFileCodeStream(userMessage)
+                            : aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+                    default -> throw new IllegalStateException("unreachable");
+                };
                 yield processCodeStream(codeStream, codeGenTypeEnum, appId);
             }
             case VUE_PROJECT -> {
-                // 对于 Vue 项目代码，对返回的TokenStream进行处理,并传递工具调用信息
-                TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
+                // 创建场景：只暴露文件写入工具；修改场景：暴露 读/改/写/删/列目录 工具
+                TokenStream tokenStream = modify
+                        ? aiCodeGeneratorServiceFactory.getAiCodeModifyService(appId).modifyVueProjectStream(appId, userMessage)
+                        : aiCodeGeneratorServiceFactory.getAiCodeCreateService(appId).generateVueProjectStream(appId, userMessage);
                 yield processTokenStream(tokenStream, appId);
             }
             default -> {
@@ -107,6 +118,19 @@ public class AiCodeGeneratorFacade {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, errorMessage);
             }
         };
+    }
+
+    /**
+     * 判断本次请求是【创建】还是【修改】：
+     * 应用对应的代码输出目录已存在且包含文件 → 修改；否则 → 创建
+     */
+    private boolean isModifyRequest(long appId, CodeGenTypeEnum codeGenTypeEnum) {
+        String projectDirName = codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT
+                ? "vue_project_" + appId
+                : codeGenTypeEnum.getValue() + "_" + appId;
+        File projectDir = new File(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
+        File[] files = projectDir.listFiles();
+        return projectDir.exists() && projectDir.isDirectory() && files != null && files.length > 0;
     }
 
     /**

@@ -67,8 +67,8 @@ langchain4j:
       temperature: 0.1
       log-requests: false
       log-responses: false
-    # 智能路由 AI 模型配置
-    routing-chat-model:
+    # 简单任务 AI 模型配置（标题生成、代码生成类型路由等）
+    simple-task-chat-model:
       base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
       api-key: <your-api-key>
       model-name: qwen-turbo

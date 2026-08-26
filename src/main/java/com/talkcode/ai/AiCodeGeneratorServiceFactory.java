@@ -3,9 +3,10 @@ package com.talkcode.ai;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.talkcode.ai.tools.FileWriteTool;
-import com.talkcode.exception.BusinessException;
-import com.talkcode.exception.ErrorCode;
+import com.talkcode.ai.service.AiCodeCreateService;
+import com.talkcode.ai.service.AiCodeGeneratorService;
+import com.talkcode.ai.service.AiCodeModifyService;
+import com.talkcode.ai.tools.*;
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import com.talkcode.service.ChatHistoryService;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
@@ -23,29 +24,32 @@ import java.time.Duration;
 
 /**
  * AI 代码生成服务工厂类
- * AiCodeGeneratorService获取流程：
- * 1. 从本地缓存中获取AI服务实例，如果不存在则创建新的 AI 服务实例
- * 2. 根据应用ID创建独立的对话记忆,将对话记忆存储到Redis中
- * 3. 初始化AI服务实例
+ * <p>
+ * 职责：
+ * 1. HTML / 多文件（无工具）-> {@link AiCodeGeneratorService}
+ * 2. Vue 创建（仅文件写入工具）-> {@link AiCodeCreateService}
+ * 3. Vue 修改（读/改/写/删/列目录工具）-> {@link AiCodeModifyService}
+ * <p>
+ * 核心优化：按场景只传递最小工具集，减少模型可选择的工具面，从而降低工具调用幻觉、提高输出准确度。
  */
 @Configuration
 @Slf4j
 public class AiCodeGeneratorServiceFactory {
 
     /**
-     * 非流式模型
+     * 非流式模型（主代码生成大模型，starter 自动装配的 openAiChatModel）
      */
     @Resource
     private ChatModel chatModel;
 
     /**
-     * 流式模型
+     * 流式模型（HTML/多文件）
      */
     @Resource
-    private StreamingChatModel openAiStreamingChatModel;
+    private StreamingChatModel streamingChatModel;
 
     /**
-     * 推理模型
+     * 推理模型（Vue 项目）
      */
     @Resource
     private StreamingChatModel reasoningStreamingChatModel;
@@ -56,7 +60,6 @@ public class AiCodeGeneratorServiceFactory {
     @Resource
     private RedisChatMemoryStore redisChatMemoryStore;
 
-
     /**
      * 对话历史服务
      */
@@ -64,38 +67,52 @@ public class AiCodeGeneratorServiceFactory {
     private ChatHistoryService chatHistoryService;
 
     /**
-     * 缓存 AI 服务实例，避免重复创建
-     * 缓存策略：
-     * - 最大缓存1000个应用ID的AI服务实例
-     * - 写入后 30分钟过期
-     * - 访问后 10分钟过期
-     * - 缓存移除监听器：记录移除原因
+     * 文件工具
+     */
+    @Resource
+    private FileWriteTool fileWriteTool;
+    @Resource
+    private FileReadTool fileReadTool;
+    @Resource
+    private FileModifyTool fileModifyTool;
+    @Resource
+    private FileDeleteTool fileDeleteTool;
+    @Resource
+    private FileDirReadTool fileDirReadTool;
+
+    /**
+     * HTML / 多文件服务缓存（按 应用ID + 生成类型）
      */
     private final Cache<String, AiCodeGeneratorService> serviceCache = Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofMinutes(30))
             .expireAfterAccess(Duration.ofMinutes(10))
-            .removalListener((key, value, cause) -> {
-                log.info("AI 服务实例缓存被移除: cacheKey: {}, 原因: {}", key, cause);
-            })
+            .removalListener((key, value, cause) -> log.info("AI 服务实例缓存被移除: cacheKey: {}, 原因: {}", key, cause))
+            .build();
+
+    /**
+     * Vue 创建服务缓存（按 应用ID）
+     */
+    private final Cache<Long, AiCodeCreateService> vueCreateServiceCache = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(Duration.ofMinutes(30))
+            .expireAfterAccess(Duration.ofMinutes(10))
+            .removalListener((key, value, cause) -> log.info("Vue 创建服务缓存被移除: appId: {}, 原因: {}", key, cause))
+            .build();
+
+    /**
+     * Vue 修改服务缓存（按 应用ID）
+     */
+    private final Cache<Long, AiCodeModifyService> vueModifyServiceCache = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(Duration.ofMinutes(30))
+            .expireAfterAccess(Duration.ofMinutes(10))
+            .removalListener((key, value, cause) -> log.info("Vue 修改服务缓存被移除: appId: {}, 原因: {}", key, cause))
             .build();
 
 
     /**
-     * 根据appID获取AI服务实例（兼容旧逻辑）
-     *
-     * @param appId 应用ID
-     * @return AI 服务实例
-     */
-    public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
-        return getAiCodeGeneratorService(appId, CodeGenTypeEnum.HTML);
-    }
-
-    /**
-     * 根据appID获取AI服务实例（带缓存）
-     *
-     * @param appId 应用ID
-     * @return AI 服务实例
+     * 根据appID获取HTML/多文件AI服务实例（带缓存）
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(long appId, CodeGenTypeEnum codeGenType) {
         String cacheKey = buildCacheKey(appId, codeGenType);
@@ -103,15 +120,72 @@ public class AiCodeGeneratorServiceFactory {
     }
 
     /**
-     * 创建新的 AI 服务实例，用于生成代码
-     *
-     * @param appId 应用ID
-     * @return AI 服务实例
+     * 获取 Vue 创建服务实例（带缓存）
      */
+    public AiCodeCreateService getAiCodeCreateService(long appId) {
+        return vueCreateServiceCache.get(appId, key -> createVueCreateService(appId));
+    }
 
+    /**
+     * 获取 Vue 修改服务实例（带缓存）
+     */
+    public AiCodeModifyService getAiCodeModifyService(long appId) {
+        return vueModifyServiceCache.get(appId, key -> createVueModifyService(appId));
+    }
+
+
+    /**
+     * 创建 HTML / 多文件 AI 服务实例（无工具）
+     */
     private AiCodeGeneratorService createAiCodeGeneratorService(long appId, CodeGenTypeEnum codeGenType) {
-        log.info("为 appId: {} 创建新的 AI 服务实例", appId);
-        // 根据 appId 构建独立的对话记忆,将对话记忆存储到Redis中
+        log.info("为 appId: {} 创建 HTML/多文件 AI 服务实例", appId);
+        MessageWindowChatMemory chatMemory = buildChatMemory(appId);
+        return AiServices.builder(AiCodeGeneratorService.class)
+                .chatModel(chatModel)
+                .streamingChatModel(streamingChatModel)
+                .chatMemory(chatMemory)
+                .build();
+    }
+
+    /**
+     * 创建 Vue 创建服务实例：只暴露【文件写入工具】，从零生成项目
+     */
+    private AiCodeCreateService createVueCreateService(long appId) {
+        log.info("为 appId: {} 创建 Vue 创建 AI 服务实例", appId);
+        MessageWindowChatMemory chatMemory = buildChatMemory(appId);
+        return AiServices.builder(AiCodeCreateService.class)
+                .chatModel(chatModel)
+                .streamingChatModel(reasoningStreamingChatModel)
+                .chatMemoryProvider(memoryId -> chatMemory)
+                // 创建场景只需要写入文件这一个工具，减少工具面、降低幻觉
+                .tools(fileWriteTool)
+                // 处理幻觉工具调用
+                .hallucinatedToolNameStrategy(toolExecutionRequest ->
+                        ToolExecutionResultMessage.from(toolExecutionRequest, "Error: there is no tool with name: " + toolExecutionRequest.name()))
+                .build();
+    }
+
+    /**
+     * 创建 Vue 修改服务实例：暴露 读/改/写/删/列目录 工具，基于真实文件做最小化修改
+     */
+    private AiCodeModifyService createVueModifyService(long appId) {
+        log.info("为 appId: {} 创建 Vue 修改 AI 服务实例", appId);
+        MessageWindowChatMemory chatMemory = buildChatMemory(appId);
+        return AiServices.builder(AiCodeModifyService.class)
+                .chatModel(chatModel)
+                .streamingChatModel(reasoningStreamingChatModel)
+                .chatMemoryProvider(memoryId -> chatMemory)
+                .tools(fileDirReadTool, fileReadTool, fileModifyTool, fileWriteTool, fileDeleteTool)
+                // 处理幻觉工具调用
+                .hallucinatedToolNameStrategy(toolExecutionRequest ->
+                        ToolExecutionResultMessage.from(toolExecutionRequest, "Error: there is no tool with name: " + toolExecutionRequest.name()))
+                .build();
+    }
+
+    /**
+     * 构建独立的对话记忆（按 appId 存储到 Redis，并从数据库加载历史）
+     */
+    private MessageWindowChatMemory buildChatMemory(long appId) {
         MessageWindowChatMemory chatMemory = MessageWindowChatMemory
                 .builder()
                 .id(appId)
@@ -120,48 +194,20 @@ public class AiCodeGeneratorServiceFactory {
                 .build();
         // 从数据库中加载对话历史到记忆中
         chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
-        // 根据代码生成类型不同,选择不同的模型
-        return switch (codeGenType) {
-            // HTML和对文件生成使用普通的聊天模型
-            case HTML, MULTI_FILE ->
-                AiServices.builder(AiCodeGeneratorService.class)
-                        .chatModel(chatModel)
-                        .streamingChatModel(openAiStreamingChatModel)
-                        .chatMemory(chatMemory)
-                        .build();
-            // Vue项目使用推理模型
-            case VUE_PROJECT ->
-                AiServices.builder(AiCodeGeneratorService.class)
-                        .chatModel(chatModel)
-                        .streamingChatModel(reasoningStreamingChatModel)
-                        // 处理对话记忆
-                        .chatMemoryProvider(memoryId -> chatMemory)
-                        // 添加文件写入工具
-                        .tools(new FileWriteTool())
-                        // 处理幻觉工具调用
-                        .hallucinatedToolNameStrategy(toolExecutionRequest ->
-                                ToolExecutionResultMessage.from(toolExecutionRequest, "Error: there is no tool with name: " + toolExecutionRequest.name()))
-                        .build();
-            default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型: " + codeGenType);
-        };
+        return chatMemory;
     }
 
 
     /**
      * 创建AI代码生成服务实例, 默认应用ID为0,此方法仅供测试使用
-     *
-     * @return AI 服务实例
      */
     @Bean
     public AiCodeGeneratorService create() {
-        return getAiCodeGeneratorService(0L);
+        return getAiCodeGeneratorService(0L, CodeGenTypeEnum.HTML);
     }
 
     /**
      * 构建缓存键Key
-     * @param appId 应用ID
-     * @param codeGenType 代码生成类型
-     * @return 缓存键Key
      */
     private String buildCacheKey(long appId, CodeGenTypeEnum codeGenType) {
         return appId + "_" + codeGenType.getValue();

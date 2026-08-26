@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * 腾讯云COS配置类
  * 
- * @author yupi
+ * @author heng
  */
 @Configuration
 @ConfigurationProperties(prefix = "cos.client")

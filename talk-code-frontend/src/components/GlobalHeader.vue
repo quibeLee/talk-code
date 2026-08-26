@@ -6,7 +6,7 @@
         <RouterLink to="/">
           <div class="header-left">
             <img class="logo" src="@/assets/logo.png" alt="Logo" />
-            <h1 class="site-title">Talk Code AI 零代码应用生成平台</h1>
+            <h1 class="site-title">Talk Code AI</h1>
           </div>
         </RouterLink>
       </a-col>
@@ -48,12 +48,12 @@
 </template>
 
 <script setup lang="ts">
-import {computed, h, ref} from 'vue'
-import {useRouter} from 'vue-router'
-import {type MenuProps, message} from 'ant-design-vue'
-import {useLoginUserStore} from '@/stores/loginUser.ts'
-import {userLogout} from '@/api/userController.ts'
-import {HomeOutlined, LogoutOutlined} from '@ant-design/icons-vue'
+import { computed, h, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { type MenuProps, message } from 'ant-design-vue'
+import { useLoginUserStore } from '@/stores/loginUser.ts'
+import { userLogout } from '@/api/userController.ts'
+import { HomeOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 
 const loginUserStore = useLoginUserStore()
 const router = useRouter()

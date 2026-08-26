@@ -8,7 +8,8 @@ import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
-import com.talkcode.ai.AiCodeGenTypeRoutingService;
+import com.talkcode.ai.service.AiCodeGenTypeRoutingService;
+import com.talkcode.ai.service.AiTitleGenderatorService;
 import com.talkcode.constant.AppConstant;
 import com.talkcode.core.AiCodeGeneratorFacade;
 import com.talkcode.core.builder.VueProjectBuilder;
@@ -75,6 +76,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
 
+    @Resource
+    private AiTitleGenderatorService aiTitleGenderatorService;
+
     @Override
     public Flux<String> chatToGenCode(long appId, String message, User loginUser) {
         // 1.校验参数
@@ -107,8 +111,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         App app = new App();
         BeanUtil.copyProperties(appAddRequest, app);
         app.setUserId(loginUser.getId());
-        // 应用名称暂时为 initPrompt 前 12 位
-        app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
+        // 使用 AI 智能生成应用名称
+        String title = aiTitleGenderatorService.generateTitle(initPrompt);
+        app.setAppName(title);
         // 使用 AI 智能选择代码生成类型
         CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
         app.setCodeGenType(selectedCodeGenType.getValue());

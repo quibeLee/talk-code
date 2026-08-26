@@ -1,6 +1,6 @@
 <template>
   <div id="userLoginPage">
-    <h2 class="title">Talk Code AI 零代码应用生成平台 - 用户登录</h2>
+    <h2 class="title">Talk Code AI - 用户登录</h2>
     <div class="desc">不写一行代码，生成完整应用</div>
     <a-form :model="formState" name="basic" autocomplete="off" @finish="handleSubmit">
       <a-form-item name="userAccount" :rules="[{ required: true, message: '请输入账号' }]">
@@ -26,11 +26,11 @@
   </div>
 </template>
 <script lang="ts" setup>
-import {reactive} from 'vue'
-import {userLogin} from '@/api/userController.ts'
-import {useLoginUserStore} from '@/stores/loginUser.ts'
-import {useRouter} from 'vue-router'
-import {message} from 'ant-design-vue'
+import { reactive } from 'vue'
+import { userLogin } from '@/api/userController.ts'
+import { useLoginUserStore } from '@/stores/loginUser.ts'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 
 const formState = reactive<API.UserLoginRequest>({
   userAccount: '',

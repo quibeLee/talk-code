@@ -1,43 +1,38 @@
 package com.talkcode.config;
 
-import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 推理流式模型配置类
+ * 非流式模型配置类
  */
 @Configuration
-@ConfigurationProperties(prefix = "langchain4j.open-ai.reasoning-streaming-chat-model")
+@ConfigurationProperties(prefix = "langchain4j.open-ai.chat-model")
 @Data
-public class ReasoningStreamingChatModelConfig {
+public class ChatModelConfig {
 
     private String baseUrl;
     private String apiKey;
     private String modelName;
     private int maxTokens;
-    private double temperature;
     private boolean logRequests;
     private boolean logResponses;
 
 
     /**
-     * 推理流式模型（用于 Vue 项目生成，带工具调用）
+     * 非流式模型, 用于原生HTML、多文件代码生成
      */
     @Bean
-    public StreamingChatModel reasoningStreamingChatModel() {
-        // 为了测试方便临时修改
-        /*final String modelName = "deepseek-chat";
-        final int maxTokens = 8192;*/
-        return OpenAiStreamingChatModel.builder()
+    public ChatModel chatModel() {
+        return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .maxTokens(maxTokens)
-                .temperature(temperature)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
                 .build();

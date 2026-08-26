@@ -1,4 +1,4 @@
-package com.talkcode.ai;
+package com.talkcode.ai.service;
 
 import com.talkcode.ai.model.HtmlCodeResult;
 import com.talkcode.ai.model.MultiFileCodeResult;

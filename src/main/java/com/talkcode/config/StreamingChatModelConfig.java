@@ -8,36 +8,31 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 推理流式模型配置类
+ * 流式模型配置类
  */
 @Configuration
-@ConfigurationProperties(prefix = "langchain4j.open-ai.reasoning-streaming-chat-model")
+@ConfigurationProperties(prefix = "langchain4j.open-ai.streaming-chat-model")
 @Data
-public class ReasoningStreamingChatModelConfig {
+public class StreamingChatModelConfig {
 
     private String baseUrl;
     private String apiKey;
     private String modelName;
     private int maxTokens;
-    private double temperature;
     private boolean logRequests;
     private boolean logResponses;
 
 
     /**
-     * 推理流式模型（用于 Vue 项目生成，带工具调用）
+     * 流式模型, 用于原生HTML、多文件代码生成
      */
     @Bean
-    public StreamingChatModel reasoningStreamingChatModel() {
-        // 为了测试方便临时修改
-        /*final String modelName = "deepseek-chat";
-        final int maxTokens = 8192;*/
+    public StreamingChatModel streamingChatModel() {
         return OpenAiStreamingChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .maxTokens(maxTokens)
-                .temperature(temperature)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
                 .build();
