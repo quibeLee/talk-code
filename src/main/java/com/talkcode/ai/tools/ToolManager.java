@@ -34,7 +34,6 @@ public class ToolManager {
     public void initTools() {
         for (BaseTool tool : tools) {
             toolMap.put(tool.getToolName(), tool);
-            log.info("注册工具: {} -> {}", tool.getToolName(), tool.getDisplayName());
         }
         log.info("工具管理器初始化完成，共注册 {} 个工具", toolMap.size());
     }

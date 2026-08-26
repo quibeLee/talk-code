@@ -1,11 +1,14 @@
 package com.talkcode.ai.service;
 
 import com.talkcode.ai.model.HtmlCodeResult;
-import com.talkcode.ai.model.MultiFileCodeResult;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import reactor.core.publisher.Flux;
+
+import java.time.Duration;
+import java.util.List;
 
 @SpringBootTest
 class AiCodeGeneratorServiceTest {
@@ -21,8 +24,17 @@ class AiCodeGeneratorServiceTest {
 
     @Test
     void generateMultiFileCode() {
-        MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode("帮我创建一个张三的个人简历，不超过30行");
-        Assertions.assertNotNull(result);
+        Flux<String> result = aiCodeGeneratorService
+                .generateMultiFileCodeStream("帮我创建一个张三的个人简历");
+
+        List<String> chunks = result.collectList()
+                .block(Duration.ofSeconds(60));  // 大模型可能较慢，设超时
+
+        Assertions.assertNotNull(chunks);
+        Assertions.assertFalse(chunks.isEmpty(), "流应返回至少一个chunk");
+
+        String fullOutput = String.join("", chunks);
+        Assertions.assertFalse(fullOutput.isBlank(), "生成结果不应为空");
     }
 
     @Test

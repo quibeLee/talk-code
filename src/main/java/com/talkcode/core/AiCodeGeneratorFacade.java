@@ -96,21 +96,17 @@ public class AiCodeGeneratorFacade {
             case HTML, MULTI_FILE -> {
                 AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId, codeGenTypeEnum);
                 Flux<String> codeStream = switch (codeGenTypeEnum) {
-                    case HTML -> modify
-                            ? aiCodeGeneratorService.modifyHtmlCodeStream(userMessage)
-                            : aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
-                    case MULTI_FILE -> modify
-                            ? aiCodeGeneratorService.modifyMultiFileCodeStream(userMessage)
-                            : aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
+                    case HTML ->
+                            modify ? aiCodeGeneratorService.modifyHtmlCodeStream(userMessage) : aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
+                    case MULTI_FILE ->
+                            modify ? aiCodeGeneratorService.modifyMultiFileCodeStream(userMessage) : aiCodeGeneratorService.generateMultiFileCodeStream(userMessage);
                     default -> throw new IllegalStateException("unreachable");
                 };
                 yield processCodeStream(codeStream, codeGenTypeEnum, appId);
             }
             case VUE_PROJECT -> {
                 // 创建场景：只暴露文件写入工具；修改场景：暴露 读/改/写/删/列目录 工具
-                TokenStream tokenStream = modify
-                        ? aiCodeGeneratorServiceFactory.getAiCodeModifyService(appId).modifyVueProjectStream(appId, userMessage)
-                        : aiCodeGeneratorServiceFactory.getAiCodeCreateService(appId).generateVueProjectStream(appId, userMessage);
+                TokenStream tokenStream = modify ? aiCodeGeneratorServiceFactory.getAiCodeModifyService(appId, codeGenTypeEnum).modifyVueProjectStream(appId, userMessage) : aiCodeGeneratorServiceFactory.getAiCodeCreateService(appId, codeGenTypeEnum).generateVueProjectStream(appId, userMessage);
                 yield processTokenStream(tokenStream, appId);
             }
             default -> {
@@ -125,9 +121,7 @@ public class AiCodeGeneratorFacade {
      * 应用对应的代码输出目录已存在且包含文件 → 修改；否则 → 创建
      */
     private boolean isModifyRequest(long appId, CodeGenTypeEnum codeGenTypeEnum) {
-        String projectDirName = codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT
-                ? "vue_project_" + appId
-                : codeGenTypeEnum.getValue() + "_" + appId;
+        String projectDirName = codeGenTypeEnum.getValue() + "_" + appId;
         File projectDir = new File(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
         File[] files = projectDir.listFiles();
         return projectDir.exists() && projectDir.isDirectory() && files != null && files.length > 0;
@@ -164,8 +158,7 @@ public class AiCodeGeneratorFacade {
         return Flux.create(sink -> {
             // 记录已上报给前端的工具调用 id，用于去重（部分提供商可能不返回 id，此时不判重、直接兜底上报）
             Set<String> reportedToolRequestIds = ConcurrentHashMap.newKeySet();
-            tokenStream
-                    .onPartialResponse((String partialResponse) -> {
+            tokenStream.onPartialResponse((String partialResponse) -> {
                         AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
                         sink.next(JSONUtil.toJsonStr(aiResponseMessage));
                     })
@@ -212,12 +205,10 @@ public class AiCodeGeneratorFacade {
                         String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + "vue_project_" + appId;
                         vueProjectBuilder.buildProject(projectPath);
                         sink.complete();
-                    })
-                    .onError((Throwable error) -> {
+                    }).onError((Throwable error) -> {
                         error.printStackTrace();
                         sink.error(error);
-                    })
-                    .start();
+                    }).start();
         });
     }
 

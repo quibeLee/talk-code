@@ -21,7 +21,7 @@ public interface AiCodeGeneratorService {
      * @param userMessage 用户消息
      * @return HTML代码字符串
      */
-    @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    @SystemMessage(fromResource = "prompt/codegen-html-create-system-prompt.txt")
     HtmlCodeResult generateHtmlCode(String userMessage);
 
     /**
@@ -29,7 +29,7 @@ public interface AiCodeGeneratorService {
      * @param userMessage 用户消息
      * @return 多文件代码字符串
      */
-    @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
+    @SystemMessage(fromResource = "prompt/codegen-multi-file-create-system-prompt.txt")
     MultiFileCodeResult generateMultiFileCode(String userMessage);
 
     /**
@@ -38,7 +38,7 @@ public interface AiCodeGeneratorService {
      * @param userMessage 用户消息
      * @return 生成的代码结果
      */
-    @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    @SystemMessage(fromResource = "prompt/codegen-html-create-system-prompt.txt")
     Flux<String> generateHtmlCodeStream(String userMessage);
 
     /**
@@ -47,7 +47,7 @@ public interface AiCodeGeneratorService {
      * @param userMessage 用户消息
      * @return 生成的代码结果
      */
-    @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
+    @SystemMessage(fromResource = "prompt/codegen-multi-file-create-system-prompt.txt")
     Flux<String> generateMultiFileCodeStream(String userMessage);
 
     /**

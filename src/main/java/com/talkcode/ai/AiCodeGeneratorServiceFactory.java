@@ -87,29 +87,28 @@ public class AiCodeGeneratorServiceFactory {
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofMinutes(30))
             .expireAfterAccess(Duration.ofMinutes(10))
-            .removalListener((key, value, cause) -> log.info("AI 服务实例缓存被移除: cacheKey: {}, 原因: {}", key, cause))
+            .removalListener((key, value, cause) -> log.info("HTML / 多文件 AI 生成服务实例缓存被移除: cacheKey: {}, 原因: {}", key, cause))
             .build();
 
     /**
-     * Vue 创建服务缓存（按 应用ID）
+     * Vue 创建服务缓存（按 应用ID + 生成类型）
      */
-    private final Cache<Long, AiCodeCreateService> vueCreateServiceCache = Caffeine.newBuilder()
+    private final Cache<String, AiCodeCreateService> vueCreateServiceCache = Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofMinutes(30))
             .expireAfterAccess(Duration.ofMinutes(10))
-            .removalListener((key, value, cause) -> log.info("Vue 创建服务缓存被移除: appId: {}, 原因: {}", key, cause))
+            .removalListener((key, value, cause) -> log.info("Vue 创建服务缓存被移除: cacheKey: {}, 原因: {}", key, cause))
             .build();
 
     /**
-     * Vue 修改服务缓存（按 应用ID）
+     * Vue 修改服务缓存（按 应用ID + 生成类型）
      */
-    private final Cache<Long, AiCodeModifyService> vueModifyServiceCache = Caffeine.newBuilder()
+    private final Cache<String, AiCodeModifyService> vueModifyServiceCache = Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofMinutes(30))
             .expireAfterAccess(Duration.ofMinutes(10))
-            .removalListener((key, value, cause) -> log.info("Vue 修改服务缓存被移除: appId: {}, 原因: {}", key, cause))
+            .removalListener((key, value, cause) -> log.info("Vue 修改服务缓存被移除: cacheKey: {}, 原因: {}", key, cause))
             .build();
-
 
     /**
      * 根据appID获取HTML/多文件AI服务实例（带缓存）
@@ -120,17 +119,19 @@ public class AiCodeGeneratorServiceFactory {
     }
 
     /**
-     * 获取 Vue 创建服务实例（带缓存）
+     * 获取 Vue 创建服务实例（带缓存，key 带 create 场景前缀，与修改服务严格区分）
      */
-    public AiCodeCreateService getAiCodeCreateService(long appId) {
-        return vueCreateServiceCache.get(appId, key -> createVueCreateService(appId));
+    public AiCodeCreateService getAiCodeCreateService(long appId, CodeGenTypeEnum codeGenType) {
+        String cacheKey = "create_" + buildCacheKey(appId, codeGenType);
+        return vueCreateServiceCache.get(cacheKey, key -> createVueCreateService(appId));
     }
 
     /**
-     * 获取 Vue 修改服务实例（带缓存）
+     * 获取 Vue 修改服务实例（带缓存，key 带 modify 场景前缀，与创建服务严格区分）
      */
-    public AiCodeModifyService getAiCodeModifyService(long appId) {
-        return vueModifyServiceCache.get(appId, key -> createVueModifyService(appId));
+    public AiCodeModifyService getAiCodeModifyService(long appId, CodeGenTypeEnum codeGenType) {
+        String cacheKey = "modify_" + buildCacheKey(appId, codeGenType);
+        return vueModifyServiceCache.get(cacheKey, key -> createVueModifyService(appId));
     }
 
 
@@ -138,7 +139,6 @@ public class AiCodeGeneratorServiceFactory {
      * 创建 HTML / 多文件 AI 服务实例（无工具）
      */
     private AiCodeGeneratorService createAiCodeGeneratorService(long appId, CodeGenTypeEnum codeGenType) {
-        log.info("为 appId: {} 创建 HTML/多文件 AI 服务实例", appId);
         MessageWindowChatMemory chatMemory = buildChatMemory(appId);
         return AiServices.builder(AiCodeGeneratorService.class)
                 .chatModel(chatModel)
@@ -193,7 +193,7 @@ public class AiCodeGeneratorServiceFactory {
                 .maxMessages(20)
                 .build();
         // 从数据库中加载对话历史到记忆中
-        chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
+        int loadedMessages = chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
         return chatMemory;
     }
 
