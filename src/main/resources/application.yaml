@@ -47,23 +47,23 @@ langchain4j:
     chat-model:
       base-url: https://api.deepseek.com
       api-key: <your-api-key>
-      model-name: deepseek-chat
-      max-tokens: 8192
+      model-name: deepseek-v4-flash
+      max-tokens: 16384
       log-requests: false
       log-responses: false
     streaming-chat-model:
       base-url: https://api.deepseek.com
       api-key: <your-api-key>
-      model-name: deepseek-chat
-      max-tokens: 8192
+      model-name: deepseek-v4-flash
+      max-tokens: 16384
       log-requests: false
       log-responses: false
     # 推理 AI 模型配置（用于复杂的推理任务）
     reasoning-streaming-chat-model:
       base-url: https://api.deepseek.com
       api-key: <your-api-key>
-      model-name: deepseek-chat
-      max-tokens: 8192
+      model-name: deepseek-v4-flash
+      max-tokens: 32768
       temperature: 0.1
       log-requests: false
       log-responses: false
