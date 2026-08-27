@@ -6,7 +6,6 @@ import cn.hutool.json.JSONUtil;
 import com.talkcode.ai.model.message.*;
 import com.talkcode.ai.tools.BaseTool;
 import com.talkcode.ai.tools.ToolManager;
-import com.talkcode.constant.AppConstant;
 import com.talkcode.core.builder.VueProjectBuilder;
 import com.talkcode.model.entity.User;
 import com.talkcode.model.enums.ChatHistoryMessageTypeEnum;
@@ -16,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
-import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -69,10 +67,6 @@ public class JsonMessageStreamHandler {
                     } else {
                         log.warn("AI 流式响应内容为空，跳过保存 AI 对话消息, appId={}", appId);
                     }
-                    // 异步构建 Vue 项目
-                    // 构建路径
-                    String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + "vue_project_" + appId;
-                    vueProjectBuilder.buildProjectAsync(projectPath);
                 })
                 .doOnError(error -> {
                     // 如果AI回复失败，也要记录错误消息
