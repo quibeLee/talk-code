@@ -12,7 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 public class AiConcurrentTest {
 
     @Resource
-    private AiCodeSimpleTaskServiceFactory simpleTaskServiceFactory;
+    private AiCodeSimpleTaskServiceFactory routingServiceFactory;
 
     @Test
     public void testConcurrentRoutingCalls() throws InterruptedException {
@@ -27,7 +27,7 @@ public class AiConcurrentTest {
             final String prompt = prompts[i];
             final int index = i + 1;
             threads[i] = Thread.ofVirtual().start(() -> {
-                AiCodeGenTypeRoutingService service = simpleTaskServiceFactory.createAiCodeGenTypeRoutingService();
+                AiCodeGenTypeRoutingService service = routingServiceFactory.createAiCodeGenTypeRoutingService();
                 var result = service.routeCodeGenType(prompt);
                 log.info("线程 {}: {} -> {}", index, prompt, result.getValue());
             });

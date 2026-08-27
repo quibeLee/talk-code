@@ -18,6 +18,9 @@ import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
 import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
 
+/**
+ * 代码生成工作流(子图模式)
+ */
 @Slf4j
 public class CodeGenSubgraphWorkflow {
 
