@@ -3,10 +3,11 @@ package com.talkcode.ai;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.talkcode.ai.guardrail.PromptSafetyInputGuardrail;
 import com.talkcode.ai.service.AiCodeCreateService;
 import com.talkcode.ai.service.AiCodeGeneratorService;
 import com.talkcode.ai.service.AiCodeModifyService;
-import com.talkcode.ai.tools.*;
+import com.talkcode.ai.tools.ToolManager;
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import com.talkcode.service.ChatHistoryService;
 import com.talkcode.utils.SpringContextUtil;
@@ -56,15 +57,7 @@ public class AiCodeGeneratorServiceFactory {
      * 文件工具
      */
     @Resource
-    private FileWriteTool fileWriteTool;
-    @Resource
-    private FileReadTool fileReadTool;
-    @Resource
-    private FileModifyTool fileModifyTool;
-    @Resource
-    private FileDeleteTool fileDeleteTool;
-    @Resource
-    private FileDirReadTool fileDirReadTool;
+    private ToolManager toolManager;
 
     /**
      * HTML / 多文件服务缓存（按 应用ID + 生成类型）
@@ -148,10 +141,12 @@ public class AiCodeGeneratorServiceFactory {
                 .streamingChatModel(reasoningStreamingChatModel)
                 .chatMemoryProvider(memoryId -> chatMemory)
                 // 创建场景只需要写入文件这一个工具，减少工具面、降低幻觉
-                .tools(fileWriteTool)
+                .tools(toolManager.getTool("writeFile"))
+                .maxToolCallingRoundTrips(30) // 工具允许调用次数设置为30
                 // 处理幻觉工具调用
                 .hallucinatedToolNameStrategy(toolExecutionRequest ->
                         ToolExecutionResultMessage.from(toolExecutionRequest, "Error: there is no tool with name: " + toolExecutionRequest.name()))
+                .inputGuardrails(new PromptSafetyInputGuardrail())// 增加用户输入护轨
                 .build();
     }
 
@@ -167,10 +162,12 @@ public class AiCodeGeneratorServiceFactory {
                 .chatModel(chatModel)
                 .streamingChatModel(reasoningStreamingChatModel)
                 .chatMemoryProvider(memoryId -> chatMemory)
-                .tools(fileDirReadTool, fileReadTool, fileModifyTool, fileWriteTool, fileDeleteTool)
+                .tools((Object) toolManager.getAllTools())
+                .maxToolCallingRoundTrips(30) // 工具允许调用次数设置为30
                 // 处理幻觉工具调用
                 .hallucinatedToolNameStrategy(toolExecutionRequest ->
                         ToolExecutionResultMessage.from(toolExecutionRequest, "Error: there is no tool with name: " + toolExecutionRequest.name()))
+                .inputGuardrails(new PromptSafetyInputGuardrail()) // 增加用户输入护轨
                 .build();
     }
 
