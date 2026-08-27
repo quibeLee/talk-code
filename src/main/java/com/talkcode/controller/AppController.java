@@ -18,6 +18,8 @@ import com.talkcode.model.dto.app.*;
 import com.talkcode.model.entity.App;
 import com.talkcode.model.entity.User;
 import com.talkcode.model.vo.AppVO;
+import com.talkcode.ratelimter.annotation.RateLimit;
+import com.talkcode.ratelimter.enums.RateLimitType;
 import com.talkcode.service.AppService;
 import com.talkcode.service.ProjectDownloadService;
 import com.talkcode.service.UserService;
@@ -57,6 +59,7 @@ public class AppController {
      * chat 应用服务
      */
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "AI 对话请求过于频繁，请稍后再试")
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam("appId") long appId, @RequestParam("message") String message, HttpServletRequest request) {
         // 1.校验参数
         ThrowUtils.throwIf(appId <= 0, ErrorCode.PARAMS_ERROR, "应用 id 不能为空");
