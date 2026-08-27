@@ -6,6 +6,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 
 /**
  * 路由/标题等轻量任务模型配置
@@ -30,7 +31,8 @@ public class SimpleTaskChatModelConfig {
      * 轻量任务 ChatModel（如 qwen-turbo）
      */
     @Bean
-    public ChatModel simpleTaskChatModel() {
+    @Scope("prototype")
+    public ChatModel simpleTaskChatModelPrototype() {
         return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)

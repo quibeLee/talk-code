@@ -6,6 +6,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 
 /**
  * 推理流式模型配置类
@@ -28,10 +29,8 @@ public class ReasoningStreamingChatModelConfig {
      * 推理流式模型（用于 Vue 项目生成，带工具调用）
      */
     @Bean
-    public StreamingChatModel reasoningStreamingChatModel() {
-        // 为了测试方便临时修改
-        /*final String modelName = "deepseek-chat";
-        final int maxTokens = 8192;*/
+    @Scope("prototype")
+    public StreamingChatModel reasoningStreamingChatModelPrototype() {
         return OpenAiStreamingChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)

@@ -1,6 +1,6 @@
 package com.talkcode.langgraph4j.ai;
 
-import com.talkcode.ai.AiCodeSimpleTaskServiceFactory;
+import com.talkcode.ai.AiCodeGenTypeRountinhServiceFactory;
 import com.talkcode.ai.service.AiCodeGenTypeRoutingService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 public class AiConcurrentTest {
 
     @Resource
-    private AiCodeSimpleTaskServiceFactory routingServiceFactory;
+    private AiCodeGenTypeRountinhServiceFactory routingServiceFactory;
 
     @Test
     public void testConcurrentRoutingCalls() throws InterruptedException {

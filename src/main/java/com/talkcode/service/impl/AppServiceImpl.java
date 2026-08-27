@@ -8,8 +8,8 @@ import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
-import com.talkcode.ai.service.AiCodeGenTypeRoutingService;
-import com.talkcode.ai.service.AiTitleGenderatorService;
+import com.talkcode.ai.AiCodeGenTitleServiceFactory;
+import com.talkcode.ai.AiCodeGenTypeRountinhServiceFactory;
 import com.talkcode.constant.AppConstant;
 import com.talkcode.core.AiCodeGeneratorFacade;
 import com.talkcode.core.builder.VueProjectBuilder;
@@ -74,10 +74,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private ScreenshotService screenshotService;
 
     @Resource
-    private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
+    private AiCodeGenTitleServiceFactory aiCodeGenTitleServiceFactory;
 
     @Resource
-    private AiTitleGenderatorService aiTitleGenderatorService;
+    private AiCodeGenTypeRountinhServiceFactory aiCodeGenTypeRountinhServiceFactory;
 
     @Override
     public Flux<String> chatToGenCode(long appId, String message, User loginUser) {
@@ -112,10 +112,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         BeanUtil.copyProperties(appAddRequest, app);
         app.setUserId(loginUser.getId());
         // 使用 AI 智能生成应用名称
-        String title = aiTitleGenderatorService.generateTitle(initPrompt);
+        String title = aiCodeGenTitleServiceFactory.createAiTitleGenderatorService().generateTitle(initPrompt);
         app.setAppName(title);
         // 使用 AI 智能选择代码生成类型
-        CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
+        CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRountinhServiceFactory.createAiCodeGenTypeRoutingService().routeCodeGenType(initPrompt);
         app.setCodeGenType(selectedCodeGenType.getValue());
         // 插入数据库
         boolean result = this.save(app);

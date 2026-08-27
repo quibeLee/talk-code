@@ -6,6 +6,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 
 import java.util.Map;
 
@@ -29,7 +30,8 @@ public class StreamingChatModelConfig {
      * 流式模型, 用于原生HTML、多文件代码生成
      */
     @Bean
-    public StreamingChatModel streamingChatModel() {
+    @Scope("prototype")
+    public StreamingChatModel streamingChatModelPrototype() {
         return OpenAiStreamingChatModel.builder()
                 // 禁用推理模式，避免模型的reason-content导致tokens超量,问题：“推理吃光预算导致空内容”
                 .customParameters(Map.of("thinking", Map.of("type", "disabled")))

@@ -9,6 +9,7 @@ import com.talkcode.ai.service.AiCodeModifyService;
 import com.talkcode.ai.tools.*;
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import com.talkcode.service.ChatHistoryService;
+import com.talkcode.utils.SpringContextUtil;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -36,23 +37,8 @@ import java.time.Duration;
 @Slf4j
 public class AiCodeGeneratorServiceFactory {
 
-    /**
-     * 非流式模型（主代码生成大模型，starter 自动装配的 openAiChatModel）
-     */
-    @Resource
+    @Resource(name = "openAiChatModel")
     private ChatModel chatModel;
-
-    /**
-     * 流式模型（HTML/多文件）
-     */
-    @Resource
-    private StreamingChatModel streamingChatModel;
-
-    /**
-     * 推理模型（Vue 项目）
-     */
-    @Resource
-    private StreamingChatModel reasoningStreamingChatModel;
 
     /**
      * 对话记忆存储, 用于存储每个应用的对话历史
@@ -140,6 +126,8 @@ public class AiCodeGeneratorServiceFactory {
      */
     private AiCodeGeneratorService createAiCodeGeneratorService(long appId, CodeGenTypeEnum codeGenType) {
         MessageWindowChatMemory chatMemory = buildChatMemory(appId);
+        // 使用多例模式获取StreamingChatModel,解决并发问题
+        StreamingChatModel streamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
         return AiServices.builder(AiCodeGeneratorService.class)
                 .chatModel(chatModel)
                 .streamingChatModel(streamingChatModel)
@@ -153,6 +141,8 @@ public class AiCodeGeneratorServiceFactory {
     private AiCodeCreateService createVueCreateService(long appId) {
         log.info("为 appId: {} 创建 Vue 创建 AI 服务实例", appId);
         MessageWindowChatMemory chatMemory = buildChatMemory(appId);
+        // 使用多例模式获取StreamingChatModel,解决并发问题
+        StreamingChatModel reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
         return AiServices.builder(AiCodeCreateService.class)
                 .chatModel(chatModel)
                 .streamingChatModel(reasoningStreamingChatModel)
@@ -171,6 +161,8 @@ public class AiCodeGeneratorServiceFactory {
     private AiCodeModifyService createVueModifyService(long appId) {
         log.info("为 appId: {} 创建 Vue 修改 AI 服务实例", appId);
         MessageWindowChatMemory chatMemory = buildChatMemory(appId);
+        // 使用多例模式获取StreamingChatModel,解决并发问题
+        StreamingChatModel reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
         return AiServices.builder(AiCodeModifyService.class)
                 .chatModel(chatModel)
                 .streamingChatModel(reasoningStreamingChatModel)
