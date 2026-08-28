@@ -1,6 +1,7 @@
 ### CUSTOM ###
 application-local.yaml
 application-prod.yaml
+talk-code-frontend/.env.production
 tmp
 
 HELP.md
