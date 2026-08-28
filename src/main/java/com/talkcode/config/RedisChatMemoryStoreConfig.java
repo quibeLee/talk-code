@@ -2,6 +2,7 @@ package com.talkcode.config;
 
 import cn.hutool.core.util.StrUtil;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
+import dev.langchain4j.community.store.memory.chat.redis.StoreType;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -39,6 +40,8 @@ public class RedisChatMemoryStoreConfig {
                 .host(host)
                 .port(port)
                 .password(password)
+                // 解决 Redis缺失JSON.GET 异常问题
+                .storeType(StoreType.STRING)
                 .ttl(ttl);
         if (StrUtil.isNotBlank(password)) {
             builder.user("default");

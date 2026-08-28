@@ -162,7 +162,7 @@ public class AiCodeGeneratorServiceFactory {
                 .chatModel(chatModel)
                 .streamingChatModel(reasoningStreamingChatModel)
                 .chatMemoryProvider(memoryId -> chatMemory)
-                .tools((Object) toolManager.getAllTools())
+                .tools((Object[]) toolManager.getAllTools())
                 .maxToolCallingRoundTrips(30) // 工具允许调用次数设置为30
                 // 处理幻觉工具调用
                 .hallucinatedToolNameStrategy(toolExecutionRequest ->
