@@ -14,7 +14,6 @@ import com.talkcode.utils.SpringContextUtil;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
@@ -37,9 +36,6 @@ import java.time.Duration;
 @Configuration
 @Slf4j
 public class AiCodeGeneratorServiceFactory {
-
-    @Resource(name = "openAiChatModel")
-    private ChatModel chatModel;
 
     /**
      * 对话记忆存储, 用于存储每个应用的对话历史
@@ -122,7 +118,6 @@ public class AiCodeGeneratorServiceFactory {
         // 使用多例模式获取StreamingChatModel,解决并发问题
         StreamingChatModel streamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
         return AiServices.builder(AiCodeGeneratorService.class)
-                .chatModel(chatModel)
                 .streamingChatModel(streamingChatModel)
                 .chatMemory(chatMemory)
                 .build();
@@ -137,7 +132,6 @@ public class AiCodeGeneratorServiceFactory {
         // 使用多例模式获取StreamingChatModel,解决并发问题
         StreamingChatModel reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
         return AiServices.builder(AiCodeCreateService.class)
-                .chatModel(chatModel)
                 .streamingChatModel(reasoningStreamingChatModel)
                 .chatMemoryProvider(memoryId -> chatMemory)
                 // 创建场景只需要写入文件这一个工具，减少工具面、降低幻觉
@@ -159,7 +153,6 @@ public class AiCodeGeneratorServiceFactory {
         // 使用多例模式获取StreamingChatModel,解决并发问题
         StreamingChatModel reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
         return AiServices.builder(AiCodeModifyService.class)
-                .chatModel(chatModel)
                 .streamingChatModel(reasoningStreamingChatModel)
                 .chatMemoryProvider(memoryId -> chatMemory)
                 .tools((Object[]) toolManager.getAllTools())
