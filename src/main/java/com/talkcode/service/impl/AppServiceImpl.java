@@ -26,6 +26,8 @@ import com.talkcode.model.enums.ChatHistoryMessageTypeEnum;
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import com.talkcode.model.vo.AppVO;
 import com.talkcode.model.vo.UserVO;
+import com.talkcode.monitor.MonitorContext;
+import com.talkcode.monitor.MonitorContextHolder;
 import com.talkcode.service.AppService;
 import com.talkcode.service.ChatHistoryService;
 import com.talkcode.service.ScreenshotService;
@@ -98,12 +100,22 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "不支持的代码生成类型");
         // 5.插入用户对话记录
         chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
-        // 6.调用AI生成代码(流式)
+        // 6.设置监控上下文
+        MonitorContextHolder.setContext(
+                MonitorContext.builder()
+                        .userId(loginUser.getId().toString())
+                        .appId(String.valueOf(appId))
+                        .build()
+        );
+        // 7.调用AI生成代码(流式)
         Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
-        // 7.收集AI响应内容并在完成时插入到对话历史表中,如果AI生成的代码返回错误,也要进行保存
-        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, codeGenTypeEnum);
+        // 8.收集AI响应内容并在完成时插入到对话历史表中,如果AI生成的代码返回错误,也要进行保存
+        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, codeGenTypeEnum)
+                .doFinally(signalType -> {
+                    // 清除监控上下文,避免后续请求影响(无论成功或失败)
+                    MonitorContextHolder.clearContext();
+                });
     }
-
 
 
     @Override

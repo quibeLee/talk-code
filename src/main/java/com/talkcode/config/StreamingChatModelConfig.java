@@ -1,13 +1,16 @@
 package com.talkcode.config;
 
+import com.talkcode.monitor.AiModelMonitorListener;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+import jakarta.annotation.Resource;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,6 +28,9 @@ public class StreamingChatModelConfig {
     private boolean logRequests;
     private boolean logResponses;
 
+    @Resource
+    private AiModelMonitorListener aiModelMonitorListener;
+
 
     /**
      * 流式模型, 用于原生HTML、多文件代码生成
@@ -41,6 +47,7 @@ public class StreamingChatModelConfig {
                 .maxTokens(maxTokens)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
+                .listeners(List.of(aiModelMonitorListener))
                 .build();
     }
 }
