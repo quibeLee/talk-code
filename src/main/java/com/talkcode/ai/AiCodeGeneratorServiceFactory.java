@@ -136,7 +136,7 @@ public class AiCodeGeneratorServiceFactory {
                 .chatMemoryProvider(memoryId -> chatMemory)
                 // 创建场景只需要写入文件这一个工具，减少工具面、降低幻觉
                 .tools(toolManager.getTool("writeFile"))
-                .maxToolCallingRoundTrips(30) // 工具允许调用次数设置为30
+                .maxToolCallingRoundTrips(50) // 工具允许调用次数设置为30
                 // 处理幻觉工具调用
                 .hallucinatedToolNameStrategy(toolExecutionRequest ->
                         ToolExecutionResultMessage.from(toolExecutionRequest, "Error: there is no tool with name: " + toolExecutionRequest.name()))
@@ -156,7 +156,7 @@ public class AiCodeGeneratorServiceFactory {
                 .streamingChatModel(reasoningStreamingChatModel)
                 .chatMemoryProvider(memoryId -> chatMemory)
                 .tools((Object[]) toolManager.getAllTools())
-                .maxToolCallingRoundTrips(30) // 工具允许调用次数设置为30
+                .maxToolCallingRoundTrips(50) // 工具允许调用次数设置为50次
                 // 处理幻觉工具调用
                 .hallucinatedToolNameStrategy(toolExecutionRequest ->
                         ToolExecutionResultMessage.from(toolExecutionRequest, "Error: there is no tool with name: " + toolExecutionRequest.name()))
@@ -172,7 +172,7 @@ public class AiCodeGeneratorServiceFactory {
                 .builder()
                 .id(appId)
                 .chatMemoryStore(redisChatMemoryStore)
-                .maxMessages(20)
+                .maxMessages(50)
                 .build();
         // 从数据库中加载对话历史到记忆中
         int loadedMessages = chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);

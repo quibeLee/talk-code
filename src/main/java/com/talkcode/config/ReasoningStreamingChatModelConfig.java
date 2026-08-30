@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -24,6 +25,7 @@ public class ReasoningStreamingChatModelConfig {
     private String apiKey;
     private String modelName;
     private int maxTokens;
+    private Duration timeout;
     private double temperature;
     private boolean logRequests;
     private boolean logResponses;
@@ -41,6 +43,7 @@ public class ReasoningStreamingChatModelConfig {
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .maxTokens(maxTokens)
+                .timeout(timeout)
                 .temperature(temperature)
                 .logRequests(logRequests)
                 .logResponses(logResponses)

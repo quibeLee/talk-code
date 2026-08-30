@@ -50,6 +50,7 @@ langchain4j:
       api-key: <your-api-key>
       model-name: deepseek-v4-flash
       max-tokens: 16384
+      timeout: 300s
       log-requests: false
       log-responses: false
     streaming-chat-model:
@@ -57,6 +58,7 @@ langchain4j:
       api-key: <your-api-key>
       model-name: deepseek-v4-flash
       max-tokens: 16384
+      timeout: 300s
       log-requests: false
       log-responses: false
     # 推理 AI 模型配置（用于复杂的推理任务）
@@ -65,6 +67,7 @@ langchain4j:
       api-key: <your-api-key>
       model-name: deepseek-v4-flash
       max-tokens: 32768
+      timeout: 300s
       temperature: 0.1
       log-requests: false
       log-responses: false

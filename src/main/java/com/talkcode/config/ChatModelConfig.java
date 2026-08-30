@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -22,6 +23,7 @@ public class ChatModelConfig {
     private String apiKey;
     private String modelName;
     private int maxTokens;
+    private Duration timeout;
     private boolean logRequests;
     private boolean logResponses;
 
@@ -39,6 +41,7 @@ public class ChatModelConfig {
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .maxTokens(maxTokens)
+                .timeout(timeout)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
                 .build();

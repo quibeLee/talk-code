@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +26,7 @@ public class StreamingChatModelConfig {
     private String apiKey;
     private String modelName;
     private int maxTokens;
+    private Duration timeout;
     private boolean logRequests;
     private boolean logResponses;
 
@@ -45,6 +47,7 @@ public class StreamingChatModelConfig {
                 .baseUrl(baseUrl)
                 .modelName(modelName)
                 .maxTokens(maxTokens)
+                .timeout(timeout)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
                 .listeners(List.of(aiModelMonitorListener))
