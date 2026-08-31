@@ -96,8 +96,12 @@ Talk Code Studio 是一个以工程化为目标的 AI 代码生成平台。
 - 精选缓存：首页的精选应用分页结果写入 Redis（前 10 页缓存，TTL 5 分钟），并在精选数据变更时主动失效。
 
 ---
+## 全流程预览
+
+<img src="docs/archify/talk-code.architecture.visual-check.2048x1320.light.png"  width="2048"  alt="全流程预览"/>
 
 ## 技术架构
+   
 
 ```mermaid
 flowchart TB

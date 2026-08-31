@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Talk Code — AI 对话生成网站应用（核心架构）",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main-path",
+        "label": "核心生成链路",
+        "focus": [
+          "frontend",
+          "controller",
+          "orchestration",
+          "ai-factory",
+          "codegen",
+          "preview"
+        ],
+        "note": "用户提示词 → SSE 流式生成 → 文件落盘 → iframe 实时预览。"
+      },
+      {
+        "id": "ops-data",
+        "label": "部署与数据",
+        "focus": [
+          "orchestration",
+          "deploy",
+          "storage"
+        ],
+        "note": "部署/下载，以及 MySQL + Redis 的持久化读写。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "frontend",
+      "type": "frontend",
+      "label": "Vue3 前端",
+      "sublabel": "首页 · 对话页 · 管理页",
+      "tag": "EventSource SSE",
+      "pos": [
+        40,
+        200
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "controller",
+      "type": "backend",
+      "label": "Controller 层",
+      "sublabel": "REST + SSE 入口",
+      "tag": "@AuthCheck · 限流",
+      "pos": [
+        280,
+        200
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "orchestration",
+      "type": "backend",
+      "label": "AppServiceImpl 编排",
+      "sublabel": "创建 · 对话 · 部署 · 下载",
+      "tag": "业务核心",
+      "pos": [
+        520,
+        200
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "ai-factory",
+      "type": "backend",
+      "label": "AI 服务工厂",
+      "sublabel": "langchain4j AiServices",
+      "tag": "多例模型 · 工具 · 记忆",
+      "pos": [
+        760,
+        200
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "codegen",
+      "type": "backend",
+      "label": "代码生成与保存",
+      "sublabel": "AiCodeGeneratorFacade",
+      "tag": "创建/修改分流",
+      "pos": [
+        1000,
+        200
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "preview",
+      "type": "backend",
+      "label": "静态资源预览",
+      "sublabel": "StaticResourceController",
+      "tag": "/api/static",
+      "pos": [
+        1240,
+        200
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "deploy",
+      "type": "backend",
+      "label": "部署与截图",
+      "sublabel": "VueProjectBuilder · Selenium",
+      "tag": "tmp/code_deploy",
+      "pos": [
+        280,
+        380
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "storage",
+      "type": "database",
+      "label": "数据存储",
+      "sublabel": "MySQL · Redis",
+      "tag": "应用/对话/会话/限流",
+      "pos": [
+        520,
+        380
+      ],
+      "size": [
+        150,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Spring Boot 后端 :9011",
+      "wraps": [
+        "controller",
+        "orchestration",
+        "ai-factory",
+        "codegen",
+        "preview",
+        "deploy"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "登录会话 · 限流",
+      "wraps": [
+        "controller",
+        "orchestration"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "fe-to-ctrl",
+      "from": "frontend",
+      "to": "controller",
+      "label": "SSE 流式对话",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ctrl-to-orch",
+      "from": "controller",
+      "to": "orchestration",
+      "label": "校验 · 鉴权 · 限流",
+      "labelDy": -19
+    },
+    {
+      "id": "orch-to-ai",
+      "from": "orchestration",
+      "to": "ai-factory",
+      "label": "AI 生成请求",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ai-to-gen",
+      "from": "ai-factory",
+      "to": "codegen",
+      "label": "流式代码 · 工具调用",
+      "labelDy": 56
+    },
+    {
+      "id": "gen-to-preview",
+      "from": "codegen",
+      "to": "preview",
+      "label": "文件落盘 tmp/code_output",
+      "labelDy": 56
+    },
+    {
+      "id": "fe-to-preview",
+      "from": "frontend",
+      "to": "preview",
+      "label": "iframe 拉取静态资源",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          115,
+          480
+        ],
+        [
+          1315,
+          480
+        ]
+      ]
+    },
+    {
+      "id": "orch-to-deploy",
+      "from": "orchestration",
+      "to": "deploy",
+      "label": "部署 / 下载",
+      "variant": "dashed"
+    },
+    {
+      "id": "orch-to-storage",
+      "from": "orchestration",
+      "to": "storage",
+      "label": "应用 · 对话读写",
+      "labelDy": 24
+    },
+    {
+      "id": "ai-to-storage",
+      "from": "ai-factory",
+      "to": "storage",
+      "label": "Redis 记忆 · 限流",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "核心链路",
+      "items": [
+        "创建应用时 AI 生成标题与代码类型（qwen-turbo）",
+        "对话经 SSE 流式返回，右侧 iframe 实时预览"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "AI 服务",
+      "items": [
+        "多例模型 + Caffeine 按应用缓存",
+        "创建/修改绑定最小工具集，降低工具幻觉",
+        "Redis 对话记忆 + 输入 Guardrail"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "部署",
+      "items": [
+        "Vue 项目 npm install/build 后复制到 tmp/code_deploy",
+        "Selenium 截图上传 COS 作为应用封面"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "外部依赖",
+      "items": [
+        "DeepSeek / DashScope 模型 API",
+        "MySQL · Redis · npm · 腾讯云 COS"
+      ]
+    }
+  ]
+}
