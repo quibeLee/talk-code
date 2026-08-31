@@ -1,5 +1,6 @@
 package com.talkcode.langgraph4j.state;
 
+
 import com.talkcode.langgraph4j.model.ImageCollectionPlan;
 import com.talkcode.langgraph4j.model.ImageResource;
 import com.talkcode.langgraph4j.model.QualityResult;
@@ -14,6 +15,7 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * 工作流上下文 - 存储所有状态信息
@@ -38,6 +40,11 @@ public class WorkflowContext implements Serializable {
      * 用户原始输入的提示词
      */
     private String originalPrompt;
+
+    /**
+     * 应用 ID
+     */
+    private Long appId;
 
     /**
      * 图片资源字符串
@@ -91,6 +98,16 @@ public class WorkflowContext implements Serializable {
     private List<ImageResource> illustrations;
     private List<ImageResource> diagrams;
     private List<ImageResource> logos;
+
+    /**
+     * 流式会话 ID（可序列化），用于跨节点恢复 streamConsumer
+     */
+    private String streamSessionId;
+
+    /**
+     * 流式分片回调（仅运行时使用，不参与序列化）
+     */
+    private transient Consumer<String> streamConsumer;
 
     @Serial
     private static final long serialVersionUID = 1L;

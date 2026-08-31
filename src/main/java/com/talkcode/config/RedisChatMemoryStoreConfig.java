@@ -3,6 +3,7 @@ package com.talkcode.config;
 import cn.hutool.core.util.StrUtil;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.community.store.memory.chat.redis.StoreType;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -47,6 +48,15 @@ public class RedisChatMemoryStoreConfig {
             builder.user("default");
         }
         return builder.build();
+    }
+
+    /**
+     * 业务实际使用的记忆存储：
+     * 装饰链 Redis → Sanitizing（清洗非法消息） → Compacting（微压缩旧工具结果）
+     */
+    @Bean
+    public ChatMemoryStore chatMemoryStore(RedisChatMemoryStore redisChatMemoryStore) {
+        return new CompactingChatMemoryStore(new SanitizingChatMemoryStore(redisChatMemoryStore));
     }
 }
 

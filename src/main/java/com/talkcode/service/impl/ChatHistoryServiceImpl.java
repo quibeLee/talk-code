@@ -3,6 +3,9 @@ package com.talkcode.service.impl;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import com.mybatisflex.core.paginate.Page;
+import com.mybatisflex.core.query.QueryWrapper;
+import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.talkcode.constant.UserConstant;
 import com.talkcode.exception.ErrorCode;
 import com.talkcode.exception.ThrowUtils;
@@ -14,9 +17,6 @@ import com.talkcode.model.entity.User;
 import com.talkcode.model.enums.ChatHistoryMessageTypeEnum;
 import com.talkcode.service.AppService;
 import com.talkcode.service.ChatHistoryService;
-import com.mybatisflex.core.paginate.Page;
-import com.mybatisflex.core.query.QueryWrapper;
-import com.mybatisflex.spring.service.impl.ServiceImpl;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -42,7 +42,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     private AppService appService;
 
     @Override
-    public boolean addChatMessage(Long appId, String message, String messageType, Long userId) {
+    public boolean addChatMessage(Long appId, String message, String messageType, Long userId, String reasoningContent, String turnId) {
         // 1. 校验参数
         ThrowUtils.throwIf(ObjUtil.isNull(appId) || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "消息不能为空");
@@ -54,7 +54,9 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         // 3.添加对话历史消息
         ChatHistory chatHistory = ChatHistory.builder()
                 .message(message)
+                .reasoningContent(reasoningContent)
                 .messageType(messageType)
+                .turnId(turnId)
                 .appId(appId)
                 .userId(userId)
                 .build();

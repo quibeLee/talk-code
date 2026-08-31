@@ -11,11 +11,11 @@ import com.talkcode.ai.tools.ToolManager;
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import com.talkcode.service.ChatHistoryService;
 import com.talkcode.utils.SpringContextUtil;
-import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -38,10 +38,10 @@ import java.time.Duration;
 public class AiCodeGeneratorServiceFactory {
 
     /**
-     * 对话记忆存储, 用于存储每个应用的对话历史
+     * 对话记忆存储, 用于存储每个应用的对话历史（带压缩/清洗装饰链）
      */
-    @Resource
-    private RedisChatMemoryStore redisChatMemoryStore;
+    @Resource(name = "chatMemoryStore")
+    private ChatMemoryStore chatMemoryStore;
 
     /**
      * 对话历史服务
@@ -134,8 +134,8 @@ public class AiCodeGeneratorServiceFactory {
         return AiServices.builder(AiCodeCreateService.class)
                 .streamingChatModel(reasoningStreamingChatModel)
                 .chatMemoryProvider(memoryId -> chatMemory)
-                // 创建场景只需要写入文件这一个工具，减少工具面、降低幻觉
-                .tools(toolManager.getTool("writeFile"))
+                // 创建场景核心只靠写入工具，另加计划/退出工具用于结构化 TODO 进度与收尾
+                .tools(toolManager.getTool("writeFile"), toolManager.getTool("updatePlan"), toolManager.getTool("exit"))
                 .maxToolCallingRoundTrips(50) // 工具允许调用次数设置为30
                 // 处理幻觉工具调用
                 .hallucinatedToolNameStrategy(toolExecutionRequest ->
@@ -155,6 +155,7 @@ public class AiCodeGeneratorServiceFactory {
         return AiServices.builder(AiCodeModifyService.class)
                 .streamingChatModel(reasoningStreamingChatModel)
                 .chatMemoryProvider(memoryId -> chatMemory)
+                // 修改场景：读/改/写/删/列目录 + 计划/退出工具
                 .tools((Object[]) toolManager.getAllTools())
                 .maxToolCallingRoundTrips(50) // 工具允许调用次数设置为50次
                 // 处理幻觉工具调用
@@ -171,7 +172,7 @@ public class AiCodeGeneratorServiceFactory {
         MessageWindowChatMemory chatMemory = MessageWindowChatMemory
                 .builder()
                 .id(appId)
-                .chatMemoryStore(redisChatMemoryStore)
+                .chatMemoryStore(chatMemoryStore)
                 .maxMessages(50)
                 .build();
         // 从数据库中加载对话历史到记忆中

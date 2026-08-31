@@ -5,7 +5,7 @@ import request from '@/request'
 /** 此处后端没有提供注释 POST /chatHistory/admin/list/page/vo */
 export async function listAllChatHistoryByPageForAdmin(
   body: API.ChatHistoryQueryRequest,
-  options?: { [key: string]: any },
+  options?: { [key: string]: any }
 ) {
   return request<API.BaseResponsePageChatHistory>('/chatHistory/admin/list/page/vo', {
     method: 'POST',
@@ -21,7 +21,7 @@ export async function listAllChatHistoryByPageForAdmin(
 export async function listAppChatHistory(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)
   params: API.listAppChatHistoryParams,
-  options?: { [key: string]: any },
+  options?: { [key: string]: any }
 ) {
   const { appId: param0, ...queryParams } = params
   return request<API.BaseResponsePageChatHistory>(`/chatHistory/app/${param0}`, {
@@ -31,6 +31,18 @@ export async function listAppChatHistory(
       pageSize: '10',
       ...queryParams,
     },
+    ...(options || {}),
+  })
+}
+
+/** 查询某一轮对话的结构化事件 GET /chatHistory/turn/${param0}/events */
+export async function listTurnEvents(
+  params: API.listTurnEventsParams,
+  options?: { [key: string]: any }
+) {
+  const { turnId: param0 } = params
+  return request<API.BaseResponseListChatEventLog>(`/chatHistory/turn/${param0}/events`, {
+    method: 'GET',
     ...(options || {}),
   })
 }

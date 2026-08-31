@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ImageCollectionServiceFactory {
 
-    @Resource(name = "openAiChatModel")
+    @Resource(name = "stableOpenAiChatModel")
     private ChatModel chatModel;
 
     @Resource

@@ -8,6 +8,7 @@ import lombok.Getter;
 @Getter
 public enum StreamMessageTypeEnum {
 
+    THINKING("thinking", "深度思考"),
     AI_RESPONSE("ai_response", "AI响应"),
     TOOL_REQUEST("tool_request", "工具请求"),
     TOOL_EXECUTED("tool_executed", "工具执行结果");

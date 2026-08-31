@@ -144,24 +144,25 @@
 </template>
 
 <script setup lang="ts">
-import {computed, nextTick, onMounted, onUnmounted, ref} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
-import {message} from 'ant-design-vue'
-import {useLoginUserStore} from '@/stores/loginUser'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
+import { useLoginUserStore } from '@/stores/loginUser'
 import {
   deleteApp as deleteAppApi,
   deployApp as deployAppApi,
   getAppVoById,
 } from '@/api/appController'
-import {listAppChatHistory} from '@/api/chatHistoryController'
-import {CodeGenTypeEnum} from '@/utils/codeGenTypes'
+import { listAppChatHistory } from '@/api/chatHistoryController'
+import { CodeGenTypeEnum } from '@/utils/codeGenTypes'
+import { resolveAppChatGenMode } from '@/utils/chatGenMode'
 import request from '@/request'
 
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
 import aiAvatar from '@/assets/aiAvatar.png'
-import {API_BASE_URL, getStaticPreviewUrl} from '@/config/env'
+import { API_BASE_URL, getStaticPreviewUrl } from '@/config/env'
 
 import {
   CloudUploadOutlined,
@@ -388,6 +389,7 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
     const params = new URLSearchParams({
       appId: appId.value || '',
       message: userMessage,
+      mode: appId.value ? resolveAppChatGenMode(appId.value) : 'classic',
     })
 
     const url = `${baseURL}/app/chat/gen/code?${params}`

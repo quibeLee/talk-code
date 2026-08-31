@@ -27,7 +27,20 @@ public interface AppService extends IService<App> {
      * @param loginUser 登录用户
      * @return 代码流
      */
-    Flux<String> chatToGenCode(long appId, String message, User loginUser);
+    default Flux<String> chatToGenCode(long appId, String message, User loginUser) {
+        return chatToGenCode(appId, message, loginUser, null);
+    }
+
+    /**
+     * chat 应用服务（支持选择生成模式：classic 工具调用 / workflow 工作流）
+     *
+     * @param appId     应用ID
+     * @param message   用户消息
+     * @param loginUser 登录用户
+     * @param mode      生成模式（classic/workflow），为空时默认 classic
+     * @return 代码流
+     */
+    Flux<String> chatToGenCode(Long appId, String message, User loginUser, String mode);
 
     /**
      * 封装脱敏后的应用信息

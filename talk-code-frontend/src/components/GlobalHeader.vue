@@ -19,9 +19,23 @@
           @click="handleMenuClick"
         />
       </a-col>
-      <!-- 右侧：用户操作区域 -->
+      <!-- 右侧：全局模式 + 用户操作区域 -->
       <a-col>
         <div class="user-login-status">
+          <a-tooltip placement="bottom">
+            <template #title>
+              工作流模式：由多节点智能体工作流生成（图片收集 → 提示词增强 → 代码生成 → 质检构建），
+              应用一旦使用工作流生成将被锁定为工作流模式
+            </template>
+            <div class="global-mode">
+              <span class="global-mode-label">全局模式</span>
+              <a-segmented
+                v-model:value="globalMode"
+                :options="chatGenModeOptions"
+                @change="handleChatGenModeChange"
+              />
+            </div>
+          </a-tooltip>
           <div v-if="loginUserStore.loginUser.id">
             <a-dropdown>
               <a-space>
@@ -54,6 +68,20 @@ import { type MenuProps, message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
 import { userLogout } from '@/api/userController.ts'
 import { HomeOutlined, LogoutOutlined } from '@ant-design/icons-vue'
+import { type ChatGenMode, getGlobalChatGenMode, setGlobalChatGenMode } from '@/utils/chatGenMode'
+
+// 全局生成模式：标准（classic）/ 工作流（workflow），持久化到 localStorage，
+// 对话页发起生成时读取并作为 mode 参数传给 /app/chat/gen/code
+const globalMode = ref<ChatGenMode>(getGlobalChatGenMode())
+const chatGenModeOptions = [
+  { label: '标准模式', value: 'classic' },
+  { label: '工作流模式', value: 'workflow' },
+]
+const handleChatGenModeChange = (value: unknown) => {
+  const mode = value as ChatGenMode
+  setGlobalChatGenMode(mode)
+  message.success(mode === 'workflow' ? '已切换为工作流模式' : '已切换为标准模式')
+}
 
 const loginUserStore = useLoginUserStore()
 const router = useRouter()
@@ -151,5 +179,23 @@ const doLogout = async () => {
 
 .ant-menu-horizontal {
   border-bottom: none !important;
+}
+
+.user-login-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.global-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+
+.global-mode-label {
+  color: rgba(0, 0, 0, 0.65);
+  white-space: nowrap;
 }
 </style>

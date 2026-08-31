@@ -1,11 +1,11 @@
 package com.talkcode.service;
 
-import com.talkcode.model.dto.chathistory.ChatHistoryQueryRequest;
-import com.talkcode.model.entity.ChatHistory;
-import com.talkcode.model.entity.User;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
+import com.talkcode.model.dto.chathistory.ChatHistoryQueryRequest;
+import com.talkcode.model.entity.ChatHistory;
+import com.talkcode.model.entity.User;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 
 import java.time.LocalDateTime;
@@ -26,7 +26,21 @@ public interface ChatHistoryService extends IService<ChatHistory> {
      * @param userId      创建用户id
      * @return 是否添加成功
      */
-    boolean addChatMessage(Long appId, String message, String messageType, Long userId);
+    default boolean addChatMessage(Long appId, String message, String messageType, Long userId) {
+        return addChatMessage(appId, message, messageType, userId, null, null);
+    }
+
+    /**
+     * 添加对话历史消息（支持 turnId）
+     */
+    default boolean addChatMessage(Long appId, String message, String messageType, Long userId, String turnId) {
+        return addChatMessage(appId, message, messageType, userId, null, turnId);
+    }
+
+    /**
+     * 添加对话历史消息（支持持久化深度思考内容 + turnId）
+     */
+    boolean addChatMessage(Long appId, String message, String messageType, Long userId, String reasoningContent, String turnId);
 
     /**
      * 删除应用下的所有对话历史消息

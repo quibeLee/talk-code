@@ -6,7 +6,9 @@ import com.talkcode.exception.ErrorCode;
 import com.talkcode.langgraph4j.model.QualityResult;
 import com.talkcode.langgraph4j.node.*;
 import com.talkcode.langgraph4j.state.WorkflowContext;
+import com.talkcode.langgraph4j.state.WorkflowStreamConsumerRegistry;
 import com.talkcode.model.enums.CodeGenTypeEnum;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.GraphRepresentation;
@@ -14,11 +16,15 @@ import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.NodeOutput;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import org.bsc.langgraph4j.prebuilt.MessagesStateGraph;
+import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
@@ -28,7 +34,11 @@ import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
 * 代码生成工作流
  */
 @Slf4j
+@Component
 public class CodeGenWorkflow {
+
+    @Resource
+    private WorkflowStreamConsumerRegistry streamConsumerRegistry;
 
     /**
      * 创建完整的工作流
@@ -260,6 +270,59 @@ public class CodeGenWorkflow {
         }
         // VUE_PROJECT 需要构建
         return "build";
+    }
+
+    /**
+     * 聊天链路使用的工作流执行方式：
+     * 仅透传代码生成分片，不输出 workflow_start/step 等业务外事件。
+     */
+    public Flux<String> executeWorkflowForChat(String originalPrompt, Long appId, CodeGenTypeEnum codeGenTypeEnum) {
+        return Flux.create(sink -> Thread.startVirtualThread(() -> {
+            String streamSessionId = UUID.randomUUID().toString();
+            try {
+                CompiledGraph<MessagesState<String>> workflow = createWorkflow();
+                AtomicInteger forwardedChunkCount = new AtomicInteger(0);
+                Consumer<String> chunkConsumer = chunk -> {
+                    forwardedChunkCount.incrementAndGet();
+                    sink.next(chunk);
+                };
+                streamConsumerRegistry.register(streamSessionId, chunkConsumer);
+                WorkflowContext initialContext = buildInitialContext(
+                        originalPrompt,
+                        appId,
+                        codeGenTypeEnum,
+                        chunkConsumer,
+                        streamSessionId
+                );
+                for (NodeOutput<MessagesState<String>> ignored : workflow.stream(
+                        Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext))) {
+                    // 聊天链路不额外输出工作流步骤文本，避免污染最终回复
+                }
+                log.info("工作流聊天流完成，appId={}, forwardedChunkCount={}", appId, forwardedChunkCount.get());
+                sink.complete();
+            } catch (Exception e) {
+                log.error("工作流聊天模式执行失败: {}", e.getMessage(), e);
+                sink.error(e);
+            } finally {
+                streamConsumerRegistry.remove(streamSessionId);
+            }
+        }));
+    }
+
+    private WorkflowContext buildInitialContext(String originalPrompt,
+                                                Long appId,
+                                                CodeGenTypeEnum codeGenTypeEnum,
+                                                Consumer<String> streamConsumer,
+                                                String streamSessionId) {
+        WorkflowContext context = WorkflowContext.builder()
+                .appId(appId)
+                .originalPrompt(originalPrompt)
+                .currentStep("初始化")
+                .generationType(codeGenTypeEnum)
+                .streamSessionId(streamSessionId)
+                .build();
+        context.setStreamConsumer(streamConsumer);
+        return context;
     }
 }
 

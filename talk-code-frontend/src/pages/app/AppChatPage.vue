@@ -7,6 +7,7 @@
         <a-tag v-if="appInfo?.codeGenType" color="blue" class="code-gen-type-tag">
           {{ formatCodeGenType(appInfo.codeGenType) }}
         </a-tag>
+        <a-tag v-if="isWorkflowLocked" color="gold">工作流锁定</a-tag>
       </div>
       <div class="header-right">
         <a-button type="default" @click="showAppDetail">
@@ -41,7 +42,7 @@
       <!-- 左侧对话区域 -->
       <div class="chat-section">
         <!-- 消息区域 -->
-        <div class="messages-container" ref="messagesContainer">
+        <div class="messages-container" ref="messagesContainer" @scroll="handleMessagesScroll">
           <!-- 加载更多按钮 -->
           <div v-if="hasMoreHistory" class="load-more-container">
             <a-button type="link" @click="loadMoreHistory" :loading="loadingHistory" size="small">
@@ -60,7 +61,85 @@
                 <a-avatar :src="aiAvatar" />
               </div>
               <div class="message-content">
-                <MarkdownRenderer v-if="message.content" :content="message.content" />
+                <!-- 计划进度面板：仅在最后一条AI消息上展示 -->
+                <div
+                  v-if="currentPlan.length > 0 && index === messages.length - 1"
+                  class="plan-panel"
+                >
+                  <div class="plan-header">
+                    <span class="plan-title">生成计划</span>
+                    <span class="plan-progress"
+                      >{{ currentPlan.filter((i) => i.status === 'completed').length }}/{{
+                        currentPlan.length
+                      }}</span
+                    >
+                  </div>
+                  <div class="plan-items">
+                    <div
+                      v-for="item in currentPlan"
+                      :key="item.id"
+                      class="plan-item"
+                      :class="{
+                        'plan-item-completed': item.status === 'completed',
+                        'plan-item-active': item.status === 'in_progress',
+                      }"
+                      :style="{ paddingLeft: getPlanItemDepth(item, currentPlan) * 20 + 'px' }"
+                    >
+                      <span class="plan-item-icon">
+                        <template v-if="item.status === 'completed'">&#10003;</template>
+                        <template v-else-if="item.status === 'in_progress'">
+                          <span class="plan-item-spinner"></span>
+                        </template>
+                        <template v-else>
+                          <span class="plan-item-dot"></span>
+                        </template>
+                      </span>
+                      <span class="plan-item-text">{{ item.text }}</span>
+                    </div>
+                  </div>
+                  <div class="plan-bar">
+                    <div
+                      class="plan-bar-fill"
+                      :style="{
+                        width:
+                          (currentPlan.filter((i) => i.status === 'completed').length /
+                            currentPlan.length) *
+                            100 +
+                          '%',
+                      }"
+                    ></div>
+                  </div>
+                </div>
+                <div v-if="message.processEvents?.length" class="process-timeline">
+                  <div
+                    v-for="eventItem in message.processEvents"
+                    :key="eventItem.id"
+                    class="process-event"
+                  >
+                    <details v-if="eventItem.details" class="event-details">
+                      <summary class="event-summary-line">
+                        <span class="event-summary-text">{{ eventItem.summary || '过程' }}</span>
+                        <span class="event-time">{{ eventItem.time }}</span>
+                      </summary>
+                      <pre class="event-plain">{{ eventItem.details }}</pre>
+                    </details>
+                    <div v-else class="event-summary-line event-summary-line-static">
+                      <span class="event-summary-text">{{ eventItem.summary || '过程' }}</span>
+                      <span class="event-time">{{ eventItem.time }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="message.content" class="final-reply">
+                  <div class="final-reply-header" @click="toggleFinalReply(index)">
+                    <span class="final-reply-toggle">{{
+                      expandedReplies.has(index) ? '▼' : '▶'
+                    }}</span>
+                    <span class="final-reply-title">最终回复</span>
+                  </div>
+                  <div v-show="expandedReplies.has(index)" class="final-reply-body">
+                    <MarkdownRenderer :content="message.content" />
+                  </div>
+                </div>
                 <div v-if="message.loading" class="loading-indicator">
                   <a-spin size="small" />
                   <span>AI 正在思考...</span>
@@ -219,14 +298,20 @@ import {
   deployApp as deployAppApi,
   getAppVoById,
 } from '@/api/appController'
-import { listAppChatHistory } from '@/api/chatHistoryController'
+import { listAppChatHistory, listTurnEvents } from '@/api/chatHistoryController'
 import { CodeGenTypeEnum, formatCodeGenType } from '@/utils/codeGenTypes'
 import request from '@/request'
+import {
+  getGlobalChatGenMode,
+  isAppWorkflowModeLocked,
+  lockAppWorkflowMode,
+  resolveAppChatGenMode,
+} from '@/utils/chatGenMode'
 
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import AppDetailModal from '@/components/AppDetailModal.vue'
 import DeploySuccessModal from '@/components/DeploySuccessModal.vue'
-import aiAvatar from '@/assets/aiAvatar.png'
+import aiAvatar from '../../../../docs/logo-ai.svg'
 import { API_BASE_URL, getStaticPreviewUrl } from '@/config/env'
 import { type ElementInfo, VisualEditor } from '@/utils/visualEditor'
 
@@ -246,6 +331,7 @@ const loginUserStore = useLoginUserStore()
 // 应用信息
 const appInfo = ref<API.AppVO>()
 const appId = ref<any>()
+const isWorkflowLocked = ref(false)
 
 // 对话相关
 interface Message {
@@ -253,12 +339,94 @@ interface Message {
   content: string
   loading?: boolean
   createTime?: string
+  turnId?: string
+  processEvents?: ProcessEventItem[]
+  streamBuffer?: string
+}
+
+interface ThinkingStreamChunk {
+  type: 'thinking'
+  data: string
+}
+
+interface ToolRequestStreamChunk {
+  type: 'tool_request'
+  id?: string
+  name?: string
+  arguments?: string
+}
+
+interface ToolExecutedStreamChunk {
+  type: 'tool_executed'
+  id?: string
+  name?: string
+  arguments?: string
+  result?: string
+}
+
+type StructuredStreamChunk = ThinkingStreamChunk | ToolRequestStreamChunk | ToolExecutedStreamChunk
+
+type ProcessEventType = 'thinking' | 'tool' | 'system' | 'error'
+
+interface ProcessEventItem {
+  id: string
+  type: ProcessEventType
+  title: string
+  summary: string
+  details?: string
+  time: string
+}
+
+const TOOL_EVENT_TYPES = new Set(['tool_request', 'tool_executed', 'tool_result'])
+const TOOL_NAME_LABEL_MAP: Record<string, string> = {
+  writeFile: '写入文件',
+  readFile: '读取文件',
+  readDir: '读取目录',
+  modifyFile: '修改文件',
+  deleteFile: '删除文件',
+  exit: '退出工具调用',
+  updatePlan: '更新计划',
+}
+
+interface PlanItem {
+  id: string
+  text: string
+  status: string
+  deps?: string[]
+}
+
+// 当前生成计划状态（跨消息保持，用于面板渲染）
+const currentPlan = ref<PlanItem[]>([])
+
+// 根据依赖关系计算每个任务的缩进层级
+const getPlanItemDepth = (item: PlanItem, items: PlanItem[]): number => {
+  if (!item.deps || item.deps.length === 0) return 0
+  const itemMap = new Map(items.map((i) => [i.id, i]))
+  let maxDepth = 0
+  for (const depId of item.deps) {
+    const dep = itemMap.get(depId)
+    if (dep) {
+      maxDepth = Math.max(maxDepth, getPlanItemDepth(dep, items) + 1)
+    }
+  }
+  return maxDepth
 }
 
 const messages = ref<Message[]>([])
+const expandedReplies = ref<Set<number>>(new Set())
+const toggleFinalReply = (index: number) => {
+  const s = new Set(expandedReplies.value)
+  if (s.has(index)) {
+    s.delete(index)
+  } else {
+    s.add(index)
+  }
+  expandedReplies.value = s
+}
 const userInput = ref('')
 const isGenerating = ref(false)
 const messagesContainer = ref<HTMLElement>()
+const shouldAutoScroll = ref(true)
 
 // 对话历史相关
 const loadingHistory = ref(false)
@@ -285,6 +453,9 @@ const visualEditor = new VisualEditor({
   onElementSelected: (elementInfo: ElementInfo) => {
     selectedElementInfo.value = elementInfo
   },
+  onError: (tip: string) => {
+    message.warning(tip)
+  },
 })
 
 // 权限相关
@@ -296,8 +467,536 @@ const isAdmin = computed(() => {
   return loginUserStore.loginUser.userRole === 'admin'
 })
 
+const isVueProjectMode = computed(() => {
+  return appInfo.value?.codeGenType === CodeGenTypeEnum.VUE_PROJECT
+})
+
 // 应用详情相关
 const appDetailVisible = ref(false)
+
+const getCurrentGenerationMode = () => {
+  if (!appId.value) {
+    return getGlobalChatGenMode()
+  }
+  return resolveAppChatGenMode(appId.value)
+}
+
+const parseStructuredStreamChunk = (chunk: unknown): StructuredStreamChunk | null => {
+  if (typeof chunk !== 'string') {
+    return null
+  }
+  const trimmed = chunk.trim()
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(trimmed.replace(/[“”]/g, '"').replace(/[‘’]/g, "'"))
+    if (parsed && parsed.type === 'thinking' && typeof parsed.data === 'string') {
+      return parsed as ThinkingStreamChunk
+    }
+    if (parsed && parsed.type === 'tool_request') {
+      return {
+        type: 'tool_request',
+        id: parsed.id,
+        name: parsed.name,
+        arguments: parsed.arguments,
+      }
+    }
+    if (parsed && parsed.type === 'tool_executed') {
+      return {
+        type: 'tool_executed',
+        id: parsed.id,
+        name: parsed.name,
+        arguments: parsed.arguments,
+        result: parsed.result,
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+const formatEventTime = () => {
+  return new Date().toLocaleTimeString('zh-CN', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+// 历史事件时间（后端 ISO 格式）格式化为 HH:mm:ss，解析失败退回当前时间
+const formatEventClock = (timeStr?: string) => {
+  if (timeStr) {
+    const date = new Date(timeStr)
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleTimeString('zh-CN', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    }
+  }
+  return formatEventTime()
+}
+
+// 工具名中文展示（与实时流式路径的 TOOL_NAME_LABEL_MAP 保持一致）
+const formatToolName = (name?: string) => {
+  return TOOL_NAME_LABEL_MAP[name || ''] || name || '工具'
+}
+
+// 从工具参数 JSON 中提取展示目标（如写入的文件路径），用于"写入文件 package.json"式摘要
+const extractToolTarget = (args?: string) => {
+  if (!args) return ''
+  const normalized = args.replace(/[“”]/g, '"').replace(/[‘’]/g, "'")
+  try {
+    const parsed = JSON.parse(normalized)
+    const candidate =
+      parsed?.relativeFilePath ??
+      parsed?.filePath ??
+      parsed?.path ??
+      parsed?.dirPath ??
+      parsed?.targetPath
+    if (typeof candidate === 'string' && candidate) {
+      return candidate.length > 40 ? `${candidate.slice(0, 40)}...` : candidate
+    }
+  } catch {
+    // 参数非完整 JSON 时退回正则提取
+  }
+  const match = normalized.match(
+    /"(?:relativeFilePath|filePath|path|dirPath|targetPath)"\s*:\s*"([^"]+)"/,
+  )
+  if (match?.[1]) {
+    return match[1].length > 40 ? `${match[1].slice(0, 40)}...` : match[1]
+  }
+  return ''
+}
+
+const sanitizeEventLine = (line: string) => {
+  return line
+    .replace(/^\[(选择工具|工具调用|工具结果|执行结束)\]\s*/, '')
+    .replace(/^(工具:|参数:|结果:)\s*/, '')
+    .trim()
+}
+
+const buildEventPreview = (details: string, type: ProcessEventType) => {
+  if (!details) {
+    return type === 'error' ? '执行异常' : '过程'
+  }
+  const lines = details
+    .split('\n')
+    .map((line) => sanitizeEventLine(line))
+    .filter(Boolean)
+  if (!lines.length) {
+    return type === 'error' ? '执行异常' : '过程'
+  }
+  const toolLine = lines.find((line) =>
+    /(写入文件|读取文件|修改文件|删除文件|创建目录|执行命令|运行命令|search|read|write)/i.test(
+      line,
+    ),
+  )
+  const first = toolLine || lines[0]
+  return first.length > 56 ? `${first.slice(0, 56)}...` : first
+}
+
+const ensureProcessEvents = (msg: Message) => {
+  if (!msg.processEvents) {
+    msg.processEvents = []
+  }
+  return msg.processEvents
+}
+
+const appendProcessEvent = (
+  msg: Message,
+  event: Omit<ProcessEventItem, 'id' | 'time'>,
+  mergeIfSameType = false,
+) => {
+  const events = ensureProcessEvents(msg)
+  const last = events[events.length - 1]
+  if (mergeIfSameType && last && last.type === event.type) {
+    last.summary = event.summary || last.summary
+    if (event.details) {
+      last.details = last.details ? `${last.details}\n${event.details}` : event.details
+    }
+    return
+  }
+  events.push({
+    id: `${Date.now()}_${events.length}_${Math.random().toString(36).slice(2, 8)}`,
+    time: formatEventTime(),
+    ...event,
+  })
+}
+
+const upsertThinkingEvent = (msg: Message, thinking: string) => {
+  const events = ensureProcessEvents(msg)
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const item = events[i]
+    if (item.type === 'thinking') {
+      item.details = thinking
+      item.summary = buildEventPreview(thinking, 'thinking')
+      return
+    }
+  }
+  events.push({
+    id: `${Date.now()}_${events.length}_thinking`,
+    type: 'thinking',
+    title: 'thinking',
+    summary: buildEventPreview(thinking, 'thinking'),
+    details: thinking,
+    time: formatEventTime(),
+  })
+}
+
+const mergeStreamSnapshotOrDelta = (previous: string, incoming: string) => {
+  if (!incoming) {
+    return {
+      next: previous,
+      delta: '',
+    }
+  }
+  if (!previous) {
+    return {
+      next: incoming,
+      delta: incoming,
+    }
+  }
+  if (incoming.startsWith(previous)) {
+    return {
+      next: incoming,
+      delta: incoming.slice(previous.length),
+    }
+  }
+  // 收到完全重复或更短前缀，视为无增量
+  if (previous === incoming || previous.startsWith(incoming)) {
+    return {
+      next: previous,
+      delta: '',
+    }
+  }
+  // 常见流式增量：新分片刚好接在尾部
+  if (incoming.startsWith(previous.slice(-Math.min(previous.length, 64)))) {
+    return {
+      next: previous + incoming,
+      delta: incoming,
+    }
+  }
+  // 兜底：当无法可靠判定为“快照”时，按增量追加，优先保证内容不丢失
+  return {
+    next: previous + incoming,
+    delta: incoming,
+  }
+}
+
+const sanitizeAssistantContent = (raw: string) => {
+  if (!raw) return ''
+  const normalizedRaw = raw
+    // 兼容部分模型返回的中文引号 JSON 片段
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    // 将拼接在一起的 JSON 对象拆开，便于逐行过滤
+    .replace(/}\s*{/g, '}\n{')
+  const lines = normalizedRaw.split('\n')
+  const filtered: string[] = []
+  let suppressToolResultBlock = false
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    // 过滤结构化工具事件 JSON，避免被展示在“最终回复”
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const obj = JSON.parse(trimmed)
+        if (obj && typeof obj.type === 'string' && TOOL_EVENT_TYPES.has(obj.type)) {
+          continue
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+    }
+    if (/"type"\s*:\s*"(tool_request|tool_executed|tool_result)"/.test(trimmed)) {
+      continue
+    }
+    if (/^\[(选择工具|工具调用|执行结束)\]/.test(trimmed)) {
+      suppressToolResultBlock = false
+      continue
+    }
+    if (/^\[工具结果\]/.test(trimmed) || /^结果:\s*/.test(trimmed)) {
+      suppressToolResultBlock = true
+      continue
+    }
+    if (/^(工具:|参数:)\s*/.test(trimmed)) continue
+    if (/^(替换前|替换后)[:：]?$/.test(trimmed)) continue
+    if (suppressToolResultBlock) continue
+    filtered.push(line)
+  }
+  return filtered.join('\n').trim()
+}
+
+const appendToolDetail = (msg: Message, toolEventIndex: number, detail: string) => {
+  const events = ensureProcessEvents(msg)
+  const event = events[toolEventIndex]
+  if (!event) return
+  event.details = event.details ? `${event.details}\n${detail}` : detail
+  event.summary = buildEventPreview(event.details || '', 'tool')
+}
+
+const findLatestToolEventIndexByCallId = (msg: Message, toolCallId?: string) => {
+  if (!toolCallId) return null
+  const events = ensureProcessEvents(msg)
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const item = events[i]
+    if (item.type === 'tool' && item.id.includes(`tool_${toolCallId}`)) {
+      return i
+    }
+  }
+  return null
+}
+
+const appendStructuredToolEvent = (
+  msg: Message,
+  chunk: ToolRequestStreamChunk | ToolExecutedStreamChunk,
+) => {
+  // updatePlan 拦截：解析 items 更新计划面板，不创建 processEvent
+  if (chunk.name === 'updatePlan') {
+    const argStr = chunk.arguments || ''
+    if (argStr) {
+      try {
+        const parsed = JSON.parse(argStr)
+        const items: PlanItem[] = parsed.items || parsed
+        if (Array.isArray(items)) {
+          currentPlan.value = items
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return
+  }
+  const toolDisplayName = TOOL_NAME_LABEL_MAP[chunk.name || ''] || chunk.name || '工具'
+  const toolTarget = extractToolTarget(chunk.arguments)
+  const toolSummary = [toolDisplayName, toolTarget].filter(Boolean).join(' ')
+  if (chunk.type === 'tool_request') {
+    const events = ensureProcessEvents(msg)
+    events.push({
+      id: `tool_${chunk.id || `${Date.now()}_${events.length}`}`,
+      type: 'tool',
+      title: 'tool',
+      summary: toolSummary,
+      details: chunk.arguments ? `参数: ${chunk.arguments}` : toolDisplayName,
+      time: formatEventTime(),
+    })
+    return
+  }
+  const targetIndex = findLatestToolEventIndexByCallId(msg, chunk.id)
+  const detailParts: string[] = []
+  detailParts.push(`工具: ${toolDisplayName}`)
+  if (chunk.arguments) detailParts.push(`参数: ${chunk.arguments}`)
+  if (chunk.result) detailParts.push(`结果: ${chunk.result}`)
+  const mergedDetails = detailParts.join('\n')
+  if (targetIndex !== null) {
+    appendToolDetail(msg, targetIndex, mergedDetails)
+    return
+  }
+  const events = ensureProcessEvents(msg)
+  events.push({
+    id: `tool_${chunk.id || `${Date.now()}_${events.length}`}`,
+    type: 'tool',
+    title: 'tool',
+    summary: toolSummary,
+    details: mergedDetails,
+    time: formatEventTime(),
+  })
+}
+
+const startToolEvent = (msg: Message) => {
+  const events = ensureProcessEvents(msg)
+  events.push({
+    id: `${Date.now()}_${events.length}_tool`,
+    type: 'tool',
+    title: 'tool',
+    summary: '工具调用',
+    details: '',
+    time: formatEventTime(),
+  })
+  return events.length - 1
+}
+
+const appendStreamChunkEvents = (
+  msg: Message,
+  chunk: string,
+  toolState: { activeIndex: number | null; collectingResult: boolean },
+) => {
+  msg.streamBuffer = (msg.streamBuffer || '') + chunk
+  const lines = msg.streamBuffer.split('\n')
+  msg.streamBuffer = lines.pop() || ''
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    if (trimmed.startsWith('[选择工具]')) {
+      // 仅作为中间态提示，不单独展示，避免出现“写入文件”这类无效卡片
+      continue
+    }
+    if (trimmed.startsWith('[工具调用]')) {
+      // 每次工具调用都单独生成一条事件，避免多次调用混在同一块中
+      toolState.activeIndex = startToolEvent(msg)
+      toolState.collectingResult = false
+      appendToolDetail(msg, toolState.activeIndex, trimmed.replace(/^\[工具调用\]\s*/, ''))
+      continue
+    }
+    if (trimmed.startsWith('[工具结果]')) {
+      if (toolState.activeIndex === null) {
+        toolState.activeIndex = startToolEvent(msg)
+      }
+      const events = ensureProcessEvents(msg)
+      const current = events[toolState.activeIndex]
+      if (current) {
+        current.title = 'tool'
+      }
+      toolState.collectingResult = true
+      appendToolDetail(msg, toolState.activeIndex, trimmed.replace(/^\[工具结果\]\s*/, ''))
+      continue
+    }
+    if (trimmed.startsWith('[执行结束]')) {
+      toolState.activeIndex = null
+      toolState.collectingResult = false
+      continue
+    }
+    if (
+      toolState.activeIndex !== null &&
+      !/^\[(选择工具|工具调用|工具结果|执行结束)\]/.test(trimmed)
+    ) {
+      appendToolDetail(msg, toolState.activeIndex, line)
+    }
+  }
+}
+
+const flushStreamBufferEvents = (
+  msg: Message,
+  toolState: { activeIndex: number | null; collectingResult: boolean },
+) => {
+  const rest = (msg.streamBuffer || '').trim()
+  if (rest) {
+    appendStreamChunkEvents(msg, `${rest}\n`, toolState)
+  }
+  msg.streamBuffer = ''
+}
+
+const toMultilineEventContent = (eventItem: API.ChatEventLog) => {
+  const lines: string[] = []
+  if (eventItem.toolName)
+    lines.push(`工具: ${formatToolName(eventItem.toolName)}（${eventItem.toolName}）`)
+  if (eventItem.toolArguments) lines.push(`参数: ${eventItem.toolArguments}`)
+  if (eventItem.toolResult) lines.push(`结果: ${eventItem.toolResult}`)
+  if (eventItem.reasoningContent) lines.push(eventItem.reasoningContent)
+  if (eventItem.content) lines.push(eventItem.content)
+  return lines.join('\n')
+}
+
+const mapTurnEventType = (eventType?: string) => {
+  const map: Record<string, { type: ProcessEventType; title: string }> = {
+    THINKING_PARTIAL: { type: 'thinking', title: '思考中' },
+    THINKING_FINAL: { type: 'thinking', title: '思考中' },
+    TOOL_REQUEST: { type: 'tool', title: '调用工具中' },
+    TOOL_RESULT: { type: 'tool', title: '工具调用完毕' },
+    ERROR: { type: 'error', title: '错误' },
+  }
+  return map[eventType || ''] || null
+}
+
+const hydrateTurnEventsForMessage = async (msg: Message) => {
+  if (!msg.turnId || !isVueProjectMode.value) return
+  try {
+    const res = await listTurnEvents({ turnId: msg.turnId })
+    if (res.data.code !== 0 || !res.data.data?.length) return
+    const sorted = [...res.data.data].sort((a, b) => (a.seq || 0) - (b.seq || 0))
+    const events: ProcessEventItem[] = []
+    let activeToolIndex: number | null = null
+
+    sorted.forEach((item, idx) => {
+      const mapped = mapTurnEventType(item.eventType)
+      if (!mapped) return
+      // 与实时路径一致：updatePlan 只驱动计划面板，不生成事件卡片
+      if (item.toolName === 'updatePlan') {
+        if (item.eventType === 'TOOL_REQUEST' && item.toolArguments) {
+          try {
+            const parsed = JSON.parse(item.toolArguments)
+            const items: PlanItem[] = parsed.items || parsed
+            if (Array.isArray(items)) {
+              currentPlan.value = items
+            }
+          } catch {
+            // ignore
+          }
+        }
+        return
+      }
+      const detail = toMultilineEventContent(item)
+      const time = formatEventClock(item.createTime)
+      if (item.eventType === 'TOOL_REQUEST') {
+        const target = extractToolTarget(item.toolArguments)
+        events.push({
+          id: `${msg.turnId}_${item.id || idx}`,
+          type: 'tool',
+          title: 'tool',
+          summary: [formatToolName(item.toolName), target].filter(Boolean).join(' '),
+          details: detail,
+          time,
+        })
+        activeToolIndex = events.length - 1
+        return
+      }
+      if (item.eventType === 'TOOL_RESULT') {
+        if (activeToolIndex !== null && events[activeToolIndex]) {
+          events[activeToolIndex].title = 'tool'
+          if (detail) {
+            events[activeToolIndex].details = events[activeToolIndex].details
+              ? `${events[activeToolIndex].details}\n${detail}`
+              : detail
+          }
+          activeToolIndex = null
+        } else {
+          const target = extractToolTarget(item.toolArguments)
+          events.push({
+            id: `${msg.turnId}_${item.id || idx}`,
+            type: 'tool',
+            title: 'tool',
+            summary: [formatToolName(item.toolName), target].filter(Boolean).join(' '),
+            details: detail,
+            time,
+          })
+        }
+        return
+      }
+      if (mapped.type === 'thinking') {
+        const thinkingDetails = detail || item.reasoningContent || ''
+        events.push({
+          id: `${msg.turnId}_${item.id || idx}`,
+          type: 'thinking',
+          title: 'thinking',
+          summary: buildEventPreview(thinkingDetails, 'thinking'),
+          details: thinkingDetails,
+          time,
+        })
+        return
+      }
+      if (mapped.type === 'error') {
+        events.push({
+          id: `${msg.turnId}_${item.id || idx}`,
+          type: 'error',
+          title: 'error',
+          summary: buildEventPreview(detail, 'error'),
+          details: detail,
+          time,
+        })
+      }
+    })
+
+    msg.processEvents = events
+  } catch (e) {
+    console.error('加载轮次事件失败:', e)
+  }
+}
 
 // 显示应用详情
 const showAppDetail = () => {
@@ -325,8 +1024,25 @@ const loadChatHistory = async (isLoadMore = false) => {
         const historyMessages: Message[] = chatHistories
           .map((chat) => ({
             type: (chat.messageType === 'user' ? 'user' : 'ai') as 'user' | 'ai',
-            content: chat.message || '',
+            content:
+              chat.messageType === 'assistant'
+                ? sanitizeAssistantContent(chat.message || '')
+                : chat.message || '',
+            turnId: chat.turnId,
             createTime: chat.createTime,
+            processEvents:
+              chat.messageType === 'assistant' && chat.reasoningContent
+                ? [
+                    {
+                      id: `${chat.turnId || chat.createTime || 'history'}_thinking`,
+                      type: 'thinking' as const,
+                      title: 'thinking',
+                      summary: buildEventPreview(chat.reasoningContent, 'thinking'),
+                      details: chat.reasoningContent,
+                      time: formatEventClock(chat.createTime),
+                    },
+                  ]
+                : [],
           }))
           .reverse() // 反转数组，让老消息在前
         if (isLoadMore) {
@@ -340,6 +1056,12 @@ const loadChatHistory = async (isLoadMore = false) => {
         lastCreateTime.value = chatHistories[chatHistories.length - 1]?.createTime
         // 检查是否还有更多历史
         hasMoreHistory.value = chatHistories.length === 10
+        for (const msg of historyMessages) {
+          if (msg.type === 'ai' && msg.turnId) {
+            // 优先展示数据库中的完整执行事件
+            await hydrateTurnEventsForMessage(msg)
+          }
+        }
       } else {
         hasMoreHistory.value = false
       }
@@ -368,6 +1090,7 @@ const fetchAppInfo = async () => {
   }
 
   appId.value = id
+  isWorkflowLocked.value = isAppWorkflowModeLocked(id)
 
   try {
     const res = await getAppVoById({ id: id as unknown as number })
@@ -418,11 +1141,12 @@ const sendInitialMessage = async (prompt: string) => {
   })
 
   await nextTick()
-  scrollToBottom()
+  scrollToBottom(true)
 
   // 开始生成
   isGenerating.value = true
-  await generateCode(prompt, aiMessageIndex)
+  const clientRequestId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  await generateCode(prompt, aiMessageIndex, clientRequestId)
 }
 
 // 发送消息
@@ -468,15 +1192,20 @@ const sendMessage = async () => {
   })
 
   await nextTick()
-  scrollToBottom()
+  scrollToBottom(true)
 
   // 开始生成
   isGenerating.value = true
-  await generateCode(message, aiMessageIndex)
+  const clientRequestId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  await generateCode(message, aiMessageIndex, clientRequestId)
 }
 
 // 生成代码 - 使用 EventSource 处理流式响应
-const generateCode = async (userMessage: string, aiMessageIndex: number) => {
+const generateCode = async (
+  userMessage: string,
+  aiMessageIndex: number,
+  clientRequestId: string,
+) => {
   let eventSource: EventSource | null = null
   let streamCompleted = false
 
@@ -488,7 +1217,13 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
     const params = new URLSearchParams({
       appId: appId.value || '',
       message: userMessage,
+      mode: getCurrentGenerationMode(),
+      clientRequestId,
     })
+    if (appId.value && getCurrentGenerationMode() === 'workflow') {
+      lockAppWorkflowMode(appId.value)
+      isWorkflowLocked.value = true
+    }
 
     const url = `${baseURL}/app/chat/gen/code?${params}`
 
@@ -498,6 +1233,11 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
     })
 
     let fullContent = ''
+    let fullThinking = ''
+    const toolState: { activeIndex: number | null; collectingResult: boolean } = {
+      activeIndex: null,
+      collectingResult: false,
+    }
 
     // 处理接收到的消息
     eventSource.onmessage = function (event) {
@@ -508,13 +1248,36 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
         const parsed = JSON.parse(event.data)
         const content = parsed.d
 
-        // 拼接内容
-        if (content !== undefined && content !== null) {
-          fullContent += content
-          messages.value[aiMessageIndex].content = fullContent
+        if (content === undefined || content === null) {
+          return
+        }
+        // 结构化分片（thinking/tool）
+        const structuredChunk = parseStructuredStreamChunk(content)
+        if (structuredChunk?.type === 'thinking') {
+          const thinkingUpdate = mergeStreamSnapshotOrDelta(fullThinking, structuredChunk.data)
+          fullThinking = thinkingUpdate.next
+          upsertThinkingEvent(messages.value[aiMessageIndex], fullThinking)
           messages.value[aiMessageIndex].loading = false
           scrollToBottom()
+          return
         }
+        if (structuredChunk?.type === 'tool_request' || structuredChunk?.type === 'tool_executed') {
+          appendStructuredToolEvent(messages.value[aiMessageIndex], structuredChunk)
+          messages.value[aiMessageIndex].loading = false
+          scrollToBottom()
+          return
+        }
+        // 普通文本分片（AI响应/工具输出）
+        const chunkText = typeof content === 'string' ? content : String(content)
+        const contentUpdate = mergeStreamSnapshotOrDelta(fullContent, chunkText)
+        fullContent = contentUpdate.next
+        // 流式阶段保留原始内容，确保工具调用标记可实时展示
+        messages.value[aiMessageIndex].content = fullContent
+        if (contentUpdate.delta) {
+          appendStreamChunkEvents(messages.value[aiMessageIndex], contentUpdate.delta, toolState)
+        }
+        messages.value[aiMessageIndex].loading = false
+        scrollToBottom()
       } catch (error) {
         console.error('解析消息失败:', error)
         handleError(error, aiMessageIndex)
@@ -526,6 +1289,8 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
       if (streamCompleted) return
 
       streamCompleted = true
+      flushStreamBufferEvents(messages.value[aiMessageIndex], toolState)
+      messages.value[aiMessageIndex].content = sanitizeAssistantContent(fullContent)
       isGenerating.value = false
       eventSource?.close()
 
@@ -547,6 +1312,12 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
         // 显示具体的错误信息
         const errorMessage = errorData.message || '生成过程中出现错误'
         messages.value[aiMessageIndex].content = `❌ ${errorMessage}`
+        appendProcessEvent(messages.value[aiMessageIndex], {
+          type: 'error',
+          title: '业务错误',
+          summary: '处理过程中出现业务错误',
+          details: errorMessage,
+        })
         messages.value[aiMessageIndex].loading = false
         message.error(errorMessage)
 
@@ -562,19 +1333,9 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
     // 处理错误
     eventSource.onerror = function () {
       if (streamCompleted || !isGenerating.value) return
-      // 检查是否是正常的连接关闭
-      if (eventSource?.readyState === EventSource.CONNECTING) {
-        streamCompleted = true
-        isGenerating.value = false
-        eventSource?.close()
-
-        setTimeout(async () => {
-          await fetchAppInfo()
-          updatePreview()
-        }, 1000)
-      } else {
-        handleError(new Error('SSE连接错误'), aiMessageIndex)
-      }
+      // 避免浏览器 EventSource 自动重连导致同一请求被反复触发
+      eventSource?.close()
+      handleError(new Error('SSE连接中断'), aiMessageIndex)
     }
   } catch (error) {
     console.error('创建 EventSource 失败：', error)
@@ -585,7 +1346,14 @@ const generateCode = async (userMessage: string, aiMessageIndex: number) => {
 // 错误处理函数
 const handleError = (error: unknown, aiMessageIndex: number) => {
   console.error('生成代码失败：', error)
-  messages.value[aiMessageIndex].content = '抱歉，生成过程中出现了错误，请重试。'
+  const errorText = '抱歉，生成过程中出现了错误，请重试。'
+  messages.value[aiMessageIndex].content = errorText
+  appendProcessEvent(messages.value[aiMessageIndex], {
+    type: 'error',
+    title: '连接异常',
+    summary: '网络连接或流式传输异常',
+    details: errorText,
+  })
   messages.value[aiMessageIndex].loading = false
   message.error('生成失败，请重试')
   isGenerating.value = false
@@ -601,10 +1369,29 @@ const updatePreview = () => {
   }
 }
 
+const isNearBottom = () => {
+  if (!messagesContainer.value) {
+    return true
+  }
+  const container = messagesContainer.value
+  const threshold = 80
+  return container.scrollHeight - (container.scrollTop + container.clientHeight) <= threshold
+}
+
+const handleMessagesScroll = () => {
+  shouldAutoScroll.value = isNearBottom()
+}
+
 // 滚动到底部
-const scrollToBottom = () => {
+const scrollToBottom = (force = false) => {
+  if (!force && !shouldAutoScroll.value) {
+    return
+  }
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    if (force) {
+      shouldAutoScroll.value = true
+    }
   }
 }
 
@@ -837,6 +1624,7 @@ onUnmounted(() => {
 
 .message-item {
   margin-bottom: 12px;
+  min-width: 0;
 }
 
 .user-message {
@@ -844,6 +1632,7 @@ onUnmounted(() => {
   justify-content: flex-end;
   align-items: flex-start;
   gap: 8px;
+  min-width: 0;
 }
 
 .ai-message {
@@ -851,14 +1640,18 @@ onUnmounted(() => {
   justify-content: flex-start;
   align-items: flex-start;
   gap: 8px;
+  min-width: 0;
 }
 
 .message-content {
-  max-width: 70%;
+  max-width: min(70%, 920px);
   padding: 12px 16px;
   border-radius: 12px;
   line-height: 1.5;
-  word-wrap: break-word;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .user-message .message-content {
@@ -870,6 +1663,200 @@ onUnmounted(() => {
   background: #f5f5f5;
   color: #1a1a1a;
   padding: 8px 12px;
+}
+
+.process-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.process-event {
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #ececec;
+  overflow: hidden;
+}
+
+.event-time {
+  font-size: 11px;
+  color: #8c8c8c;
+}
+
+.event-summary-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  user-select: none;
+}
+
+.event-details {
+  margin: 0;
+}
+
+.event-summary-line::-webkit-details-marker {
+  display: none;
+}
+
+.event-details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.event-summary-line-static {
+  cursor: default;
+}
+
+.event-summary-text {
+  font-size: 12px;
+  color: #1f1f1f;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.event-plain {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+  background: #f7f7f7;
+  border-top: 1px solid #ececec;
+  padding: 10px;
+}
+
+.final-reply {
+  margin-top: 8px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.final-reply-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.final-reply-header:hover {
+  background: #fafafa;
+}
+
+.final-reply-toggle {
+  font-size: 10px;
+  color: #8c8c8c;
+}
+
+.final-reply-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.final-reply-body {
+  padding: 0 10px 10px;
+}
+
+.plan-panel {
+  margin-bottom: 10px;
+  padding: 12px;
+  background: #f0f7ff;
+  border: 1px solid #d0e3f7;
+  border-radius: 10px;
+}
+
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.plan-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.plan-progress {
+  font-size: 12px;
+  color: #666;
+}
+
+.plan-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.plan-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.plan-item-completed {
+  color: #52c41a;
+}
+
+.plan-item-active {
+  color: #1677ff;
+  font-weight: 500;
+}
+
+.plan-item-icon {
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.plan-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d9d9d9;
+}
+
+.plan-item-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #1677ff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: plan-spin 0.8s linear infinite;
+}
+
+@keyframes plan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.plan-bar {
+  height: 4px;
+  background: #e6e6e6;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.plan-bar-fill {
+  height: 100%;
+  background: #1677ff;
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
 .message-avatar {

@@ -60,14 +60,15 @@ public class AppController {
      */
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60, message = "AI 对话请求过于频繁，请稍后再试")
-    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam("appId") long appId, @RequestParam("message") String message, HttpServletRequest request) {
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam("appId") long appId, @RequestParam("message") String message,
+                                                       @RequestParam(value = "mode", required = false) String mode, HttpServletRequest request) {
         // 1.校验参数
         ThrowUtils.throwIf(appId <= 0, ErrorCode.PARAMS_ERROR, "应用 id 不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "消息不能为空");
         // 2.获取当前登录用户
         User loginUser = userService.getCurrentLoginUser(request);
         // 3.调用chat服务
-        Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser);
+        Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser, mode);
         return contentFlux.map(data -> {
             //将内容包装成Json对象
             Map<String, String> warpper = Map.of("d", data);

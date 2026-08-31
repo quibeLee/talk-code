@@ -4,6 +4,7 @@ import com.talkcode.constant.AppConstant;
 import com.talkcode.core.AiCodeGeneratorFacade;
 import com.talkcode.langgraph4j.model.QualityResult;
 import com.talkcode.langgraph4j.state.WorkflowContext;
+import com.talkcode.langgraph4j.state.WorkflowStreamConsumerRegistry;
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import com.talkcode.utils.SpringContextUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -12,12 +13,10 @@ import org.bsc.langgraph4j.prebuilt.MessagesState;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
+import java.util.function.Consumer;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
-/**
- * 网站代码生成节点
- */
 @Slf4j
 public class CodeGeneratorNode {
 
@@ -31,12 +30,26 @@ public class CodeGeneratorNode {
             // 获取 AI 代码生成外观服务
             AiCodeGeneratorFacade codeGeneratorFacade = SpringContextUtil.getBean(AiCodeGeneratorFacade.class);
             log.info("开始生成代码，类型: {} ({})", generationType.getValue(), generationType.getText());
-            // 先使用固定的 appId (后续再整合到业务中)
-            long appId = 1L;
+            Long appId = context.getAppId();
+            if (appId == null) {
+                appId = 0L;
+            }
             // 调用流式代码生成
             Flux<String> codeStream = codeGeneratorFacade.generateAndSaveCodeStream(userMessage, generationType, appId);
-            // 同步等待流式输出完成
-            codeStream.blockLast(Duration.ofMinutes(10)); // 最多等待 10 分钟
+            Consumer<String> streamConsumer = context.getStreamConsumer();
+            if (streamConsumer == null && context.getStreamSessionId() != null) {
+                WorkflowStreamConsumerRegistry streamConsumerRegistry =
+                        SpringContextUtil.getBean(WorkflowStreamConsumerRegistry.class);
+                streamConsumer = streamConsumerRegistry.get(context.getStreamSessionId());
+            }
+            if (streamConsumer != null) {
+                codeStream
+                        .doOnNext(streamConsumer::accept)
+                        .blockLast(Duration.ofMinutes(10)); // 最多等待 10 分钟
+            } else {
+                // 同步等待流式输出完成
+                codeStream.blockLast(Duration.ofMinutes(10)); // 最多等待 10 分钟
+            }
             // 根据类型设置生成目录
             String generatedCodeDir = String.format("%s/%s_%s", AppConstant.CODE_OUTPUT_ROOT_DIR, generationType.getValue(), appId);
             log.info("AI 代码生成完成，生成目录: {}", generatedCodeDir);

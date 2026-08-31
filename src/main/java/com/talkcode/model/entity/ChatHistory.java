@@ -41,10 +41,22 @@ public class ChatHistory implements Serializable {
     private String message;
 
     /**
+     * 深度思考内容（reasoning_content）
+     */
+    @Column("reasoningContent")
+    private String reasoningContent;
+
+    /**
      * user/ai
      */
     @Column("messageType")
     private String messageType;
+
+    /**
+     * 一轮对话标识
+     */
+    @Column("turnId")
+    private String turnId;
 
     /**
      * 应用id

@@ -3,6 +3,7 @@ package com.talkcode.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
@@ -13,7 +14,9 @@ import com.talkcode.ai.AiCodeGenTypeRountinhServiceFactory;
 import com.talkcode.constant.AppConstant;
 import com.talkcode.core.AiCodeGeneratorFacade;
 import com.talkcode.core.builder.VueProjectBuilder;
+import com.talkcode.core.engine.ChatCodeGenerationEngine;
 import com.talkcode.core.handler.StreamHandlerExecutor;
+import com.talkcode.core.handler.TurnAccumulatorManager;
 import com.talkcode.exception.BusinessException;
 import com.talkcode.exception.ErrorCode;
 import com.talkcode.exception.ThrowUtils;
@@ -22,6 +25,7 @@ import com.talkcode.model.dto.app.AppAddRequest;
 import com.talkcode.model.dto.app.AppQueryRequest;
 import com.talkcode.model.entity.App;
 import com.talkcode.model.entity.User;
+import com.talkcode.model.enums.ChatGenModeEnum;
 import com.talkcode.model.enums.ChatHistoryMessageTypeEnum;
 import com.talkcode.model.enums.CodeGenTypeEnum;
 import com.talkcode.model.vo.AppVO;
@@ -35,6 +39,8 @@ import com.talkcode.service.UserService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.redisson.api.RBucket;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,10 +49,7 @@ import reactor.core.publisher.Flux;
 import java.io.File;
 import java.io.Serializable;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -57,6 +60,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
+
+    private static final String APP_CHAT_MODE_LOCK_KEY = "app:chat:mode:lock:%d";
+    private static final String MODE_WORKFLOW = "workflow";
 
     @Value("${code.deploy-host:http://localhost}")
     private String deployHost;
@@ -85,11 +91,23 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     @Resource
     private AiCodeGenTypeRountinhServiceFactory aiCodeGenTypeRountinhServiceFactory;
 
+    @Resource
+    private List<ChatCodeGenerationEngine> chatCodeGenerationEngines;
+
+    @Resource
+    private TurnAccumulatorManager turnAccumulatorManager;
+
+    @Resource
+    private RedissonClient redissonClient;
+
+    private final Map<ChatGenModeEnum, ChatCodeGenerationEngine> generationEngineMap =
+            new EnumMap<>(ChatGenModeEnum.class);
+
     @Override
-    public Flux<String> chatToGenCode(long appId, String message, User loginUser) {
+    public Flux<String> chatToGenCode(Long appId, String message, User loginUser, String mode) {
         // 1.校验参数
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
-        ThrowUtils.throwIf(appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
         // 2.查询应用信息
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
@@ -98,23 +116,55 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 4.获取应用的代码生成类型
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.fromValue(app.getCodeGenType());
         ThrowUtils.throwIf(codeGenTypeEnum == null, ErrorCode.PARAMS_ERROR, "不支持的代码生成类型");
-        // 5.插入用户对话记录
-        chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
-        // 6.设置监控上下文
+        // 5.选择生成模式：一旦某应用进入 workflow，后续请求强制 workflow，避免模式来回切换污染会话
+        ChatGenModeEnum chatGenMode = ChatGenModeEnum.getByValue(mode);
+        if (isWorkflowLocked(appId)) {
+            chatGenMode = ChatGenModeEnum.WORKFLOW;
+        } else if (chatGenMode == ChatGenModeEnum.WORKFLOW) {
+            lockWorkflowMode(appId);
+        }
+        ChatCodeGenerationEngine generationEngine = getGenerationEngine(chatGenMode);
+        String turnId = IdUtil.fastSimpleUUID();
+        String memoryId = appId + "_" + codeGenTypeEnum.getValue();
+        // 6.插入用户对话记录
+        chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId(), turnId);
+        // 7.设置监控上下文
         MonitorContextHolder.setContext(
                 MonitorContext.builder()
                         .userId(loginUser.getId().toString())
                         .appId(String.valueOf(appId))
                         .build()
         );
-        // 7.调用AI生成代码(流式)
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
-        // 8.收集AI响应内容并在完成时插入到对话历史表中,如果AI生成的代码返回错误,也要进行保存
-        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, codeGenTypeEnum)
-                .doFinally(signalType -> {
-                    // 清除监控上下文,避免后续请求影响(无论成功或失败)
-                    MonitorContextHolder.clearContext();
-                });
+        // 8.初始化本轮聚合上下文（流式阶段仅聚合，不落库）
+        turnAccumulatorManager.startTurn(appId, loginUser.getId(), memoryId, turnId, codeGenTypeEnum.getValue(), message);
+        // 9.根据模式选择生成引擎
+        Flux<String> codeStream = generationEngine.generate(appId, message, loginUser, codeGenTypeEnum);
+        // 10.由处理器在 onComplete/onError 统一触发轮次落库，并在结束时清除监控上下文
+        return streamHandlerExecutor.doExecute(codeStream, appId, loginUser, codeGenTypeEnum, turnId)
+                .doFinally(signalType -> MonitorContextHolder.clearContext());
+    }
+
+    private ChatCodeGenerationEngine getGenerationEngine(ChatGenModeEnum mode) {
+        if (generationEngineMap.isEmpty()) {
+            for (ChatCodeGenerationEngine engine : chatCodeGenerationEngines) {
+                generationEngineMap.put(engine.mode(), engine);
+            }
+        }
+        ChatCodeGenerationEngine selected =
+                generationEngineMap.getOrDefault(mode, generationEngineMap.get(ChatGenModeEnum.CLASSIC));
+        ThrowUtils.throwIf(selected == null, ErrorCode.SYSTEM_ERROR, "未找到可用的代码生成引擎");
+        return selected;
+    }
+
+    private boolean isWorkflowLocked(Long appId) {
+        RBucket<String> bucket = redissonClient.getBucket(String.format(APP_CHAT_MODE_LOCK_KEY, appId));
+        String value = bucket.get();
+        return MODE_WORKFLOW.equalsIgnoreCase(value);
+    }
+
+    private void lockWorkflowMode(Long appId) {
+        RBucket<String> bucket = redissonClient.getBucket(String.format(APP_CHAT_MODE_LOCK_KEY, appId));
+        bucket.set(MODE_WORKFLOW);
     }
 
 

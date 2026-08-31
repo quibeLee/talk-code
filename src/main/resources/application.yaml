@@ -105,3 +105,11 @@ management:
 
 
 
+
+# 上下文压缩配置（整合自 Zero-code）
+context-compaction:
+  # 触发自动压缩的 token 估算阈值，建议设为所用模型最大上下文长度的 80%
+  # 例如：DeepSeek 最大上下文 1M tokens -> 800000；GLM-4/Qwen 128K -> 102400
+  token-threshold: ${TALK_CODE_COMPACTION_TOKEN_THRESHOLD:800000}
+  # 送入摘要模型的最大字符数，避免摘要请求本身超长
+  max-summary-input-chars: ${TALK_CODE_COMPACTION_MAX_SUMMARY_INPUT_CHARS:300000}

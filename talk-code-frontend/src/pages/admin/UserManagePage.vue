@@ -43,9 +43,9 @@
   </div>
 </template>
 <script lang="ts" setup>
-import {computed, onMounted, reactive, ref} from 'vue'
-import {deleteUser, listUserVoByPage} from '@/api/userController.ts'
-import {message} from 'ant-design-vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { deleteUser, listUserVoByPage } from '@/api/userController.ts'
+import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 
 const columns = [
@@ -132,7 +132,7 @@ const doSearch = () => {
 }
 
 // 删除数据
-const doDelete = async (id: string) => {
+const doDelete = async (id: number) => {
   if (!id) {
     return
   }

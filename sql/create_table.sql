@@ -28,7 +28,7 @@ create table if not exists user
     ) comment '用户' collate = utf8mb4_unicode_ci;
 
 -- 应用表
-create table app
+create table if not exists app
 (
     id           bigint auto_increment comment 'id' primary key,
     appName      varchar(256)                       null comment '应用名称',
@@ -50,7 +50,7 @@ create table app
 
 
 -- 对话历史表
-create table chat_history
+create table if not exists chat_history
 (
     id          bigint auto_increment comment 'id' primary key,
     message     longtext                           not null comment '消息', -- AI生成的消息可能超过64KB, 所以使用 longtext 类型
@@ -65,3 +65,39 @@ create table chat_history
     INDEX idx_appId_createTime (appId, createTime) -- 游标查询核心索引
 ) comment '对话历史' collate = utf8mb4_unicode_ci;
 
+
+
+-- 聊天事件日志表（chat_history 继续作为展示视图；chat_event_log 作为回放事实表）
+create table if not exists chat_event_log
+(
+    id               bigint auto_increment comment 'id' primary key,
+    appId            bigint                                 not null comment '应用 id',
+    memoryId         varchar(128)                           not null comment '会话内存 id（appId_codeGenType）',
+    turnId           varchar(64)                            not null comment '一轮对话标识',
+    seq              int                                    not null comment '同一轮内事件顺序',
+    codeGenType      varchar(32)                            not null comment '代码生成类型（html/multi_file/vue_project）',
+    role             varchar(16)                            not null comment '消息角色（user/assistant/tool/system）',
+    eventType        varchar(32)                            not null comment '事件类型',
+    content          longtext                               null comment '消息文本内容',
+    reasoningContent longtext                               null comment '深度思考内容',
+    toolCallId       varchar(128)                           null comment '工具调用 id',
+    toolName         varchar(128)                           null comment '工具名称',
+    toolArguments    longtext                               null comment '工具参数（json）',
+    toolResult       longtext                               null comment '工具执行结果',
+    rawEventJson     longtext                               null comment '原始事件 json（审计/排障）',
+    userId           bigint                                 not null comment '用户 id',
+    createTime       datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
+    updateTime       datetime     default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP not null comment '更新时间',
+    isDelete         tinyint      default 0                 not null comment '是否删除',
+    index idx_memoryId_createTime (memoryId, createTime),
+    index idx_appId_codeGenType_createTime (appId, codeGenType, createTime),
+    index idx_turnId_seq (turnId, seq),
+    index idx_toolCallId (toolCallId)
+) comment '聊天事件日志' collate = utf8mb4_unicode_ci;
+
+-- 整合自 Zero-code：chat_history 新增深度思考内容与轮次标识列
+-- 全新建库时上方建表语句可自行加入这两列；已有库执行以下 ALTER：
+alter table  chat_history
+    add column reasoningContent longtext null comment '深度思考内容（reasoning_content）' after message,
+    add column turnId varchar(64) null comment '一轮对话标识' after messageType,
+    add index idx_turnId_createTime (turnId, createTime);

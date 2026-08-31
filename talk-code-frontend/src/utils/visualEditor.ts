@@ -20,12 +20,14 @@ export interface ElementInfo {
 export interface VisualEditorOptions {
   onElementSelected?: (elementInfo: ElementInfo) => void
   onElementHover?: (elementInfo: ElementInfo) => void
+  onError?: (message: string) => void
 }
 
 export class VisualEditor {
   private iframe: HTMLIFrameElement | null = null
   private isEditMode = false
   private options: VisualEditorOptions
+  private crossOriginWarned = false
 
   constructor(options: VisualEditorOptions = {}) {
     this.options = options
@@ -168,8 +170,15 @@ export class VisualEditor {
         } else {
           setTimeout(waitForIframeLoad, 100)
         }
-      } catch {
-        // 静默处理注入失败
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        // 跨域下无法访问 iframe.contentDocument，会导致编辑模式不可用
+        if (!this.crossOriginWarned) {
+          this.crossOriginWarned = true
+          const tip = '编辑模式不可用：预览页面与当前页面不同源，请将前端 API 地址改为同源 /api。'
+          console.warn('[VisualEditor] inject failed:', errorMessage)
+          this.options.onError?.(tip)
+        }
       }
     }
 

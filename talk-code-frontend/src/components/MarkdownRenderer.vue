@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed} from 'vue'
+import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 
@@ -20,7 +20,7 @@ const props = defineProps<Props>()
 const md: MarkdownIt = new MarkdownIt({
   html: true,
   linkify: true,
-  typographer: true,
+  typographer: false,
   highlight: function (str: string, lang: string): string {
     if (lang && hljs.getLanguage(lang)) {
       try {
@@ -40,7 +40,28 @@ const md: MarkdownIt = new MarkdownIt({
 
 // 计算渲染后的 Markdown
 const renderedMarkdown = computed(() => {
-  return md.render(props.content)
+  const raw = props.content || ''
+  if (!raw.trim()) {
+    return ''
+  }
+  // 已经是 Markdown 代码块时直接渲染
+  if (raw.includes('```')) {
+    return md.render(raw)
+  }
+  // 纯 JSON 响应自动按代码块渲染，避免被普通段落折行和引号替换影响可读性
+  const normalized = raw.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim()
+  if (
+    (normalized.startsWith('{') && normalized.endsWith('}')) ||
+    (normalized.startsWith('[') && normalized.endsWith(']'))
+  ) {
+    try {
+      const parsed = JSON.parse(normalized)
+      return md.render(`\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``)
+    } catch {
+      return md.render(`\`\`\`json\n${normalized}\n\`\`\``)
+    }
+  }
+  return md.render(raw)
 })
 </script>
 

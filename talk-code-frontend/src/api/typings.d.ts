@@ -61,6 +61,12 @@ declare namespace API {
     message?: string
   }
 
+  type BaseResponseListChatEventLog = {
+    code?: number
+    data?: ChatEventLog[]
+    message?: string
+  }
+
   type BaseResponseLoginUserVO = {
     code?: number
     data?: LoginUserVO
@@ -112,8 +118,32 @@ declare namespace API {
   type ChatHistory = {
     id?: number
     message?: string
+    reasoningContent?: string
     messageType?: string
+    turnId?: string
     appId?: number
+    userId?: number
+    createTime?: string
+    updateTime?: string
+    isDelete?: number
+  }
+
+  type ChatEventLog = {
+    id?: number
+    appId?: number
+    memoryId?: string
+    turnId?: string
+    seq?: number
+    codeGenType?: string
+    role?: string
+    eventType?: string
+    content?: string
+    reasoningContent?: string
+    toolCallId?: string
+    toolName?: string
+    toolArguments?: string
+    toolResult?: string
+    rawEventJson?: string
     userId?: number
     createTime?: string
     updateTime?: string
@@ -136,6 +166,11 @@ declare namespace API {
   type chatToGenCodeParams = {
     appId: number
     message: string
+    mode?: string
+  }
+
+  type listTurnEventsParams = {
+    turnId: string
   }
 
   type DeleteRequest = {
